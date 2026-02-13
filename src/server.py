@@ -9,6 +9,7 @@ from starlette.responses import JSONResponse
 from client import AlphaVantageClient, AlphaVantageError, RateLimitError
 from config import get_settings
 from models import DailyPrices, ErrorResponse, HealthResponse, SymbolSearchResult
+from models import TopPerformersResult, PerformerMetrics
 
 # Configure logging
 logging.basicConfig(
@@ -175,6 +176,98 @@ async def health_check(request: Request):
             status_code=500,
         )
 
+@mcp.tool
+def analyze_top_performers(
+    symbols: str,
+    limit: int = 10,
+    metric: str = "change_percent"
+) -> str:
+    """
+    Analyze and rank stocks by performance metrics.
+
+    Args:
+        symbols: Comma-separated list of stock symbols (e.g., 'AAPL,MSFT,GOOGL,TSLA')
+        limit: Number of top performers to return (default: 10)
+        metric: Metric to rank by - 'change_percent' or 'volume' (default: 'change_percent')
+
+    Returns:
+        JSON string containing ranked top performers with their metrics
+    """
+    try:
+        # Parse symbols
+        symbol_list = [s.strip().upper() for s in symbols.split(',') if s.strip()]
+
+        if not symbol_list:
+            return format_error("No symbols provided")
+
+        if len(symbol_list) > 50:
+            return format_error("Maximum 50 symbols allowed to respect rate limits")
+
+        # Validate metric
+        if metric not in ["change_percent", "volume"]:
+            return format_error("metric must be 'change_percent' or 'volume'")
+
+        logger.info(f"Analyzing {len(symbol_list)} symbols for top performers by {metric}")
+
+        # Fetch quotes for all symbols
+        quotes = client.get_batch_quotes(symbol_list)
+
+        if not quotes:
+            return format_error("Unable to fetch data for any of the provided symbols")
+
+        # Convert to PerformerMetrics
+        performers = []
+        for quote in quotes:
+            try:
+                current_price = float(quote.price)
+                previous_close = float(quote.previous_close)
+                change = float(quote.change)
+                volume = int(quote.volume)
+
+                change_percent = (change / previous_close * 100) if previous_close > 0 else 0.0
+
+                performers.append(PerformerMetrics(
+                    symbol=quote.symbol,
+                    current_price=current_price,
+                    previous_close=previous_close,
+                    change=change,
+                    change_percent=change_percent,
+                    volume=volume,
+                    period="1day"
+                ))
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Failed to parse metrics for {quote.symbol}: {e}")
+                continue
+
+        if not performers:
+            return format_error("Unable to calculate metrics for any stocks")
+
+        # Sort by the requested metric
+        if metric == "change_percent":
+            performers.sort(key=lambda x: x.change_percent, reverse=True)
+        else:  # volume
+            performers.sort(key=lambda x: x.volume, reverse=True)
+
+        # Limit results
+        top_performers = performers[:limit]
+
+        result = TopPerformersResult(
+            period="1day",
+            metric=metric,
+            performers=top_performers,
+            count=len(top_performers),
+            analyzed_count=len(performers)
+        )
+
+        return result.model_dump_json(indent=2)
+
+    except RateLimitError as e:
+        logger.warning(f"Rate limit reached: {e}")
+        return format_error(f"Rate limit reached: {str(e)}")
+
+    except Exception as e:
+        logger.exception("Unexpected error in analyze_top_performers")
+        return format_error(f"Unexpected error: {str(e)}")
 
 # HTTP entrypoint
 app = mcp.http_app()

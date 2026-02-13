@@ -191,3 +191,23 @@ class AlphaVantageClient:
             )
 
         return results
+
+    def get_batch_quotes(self, symbols: list[str]) -> list[StockQuote]:
+        """
+        Get quotes for multiple symbols.
+
+        Args:
+            symbols: List of stock ticker symbols
+
+        Returns:
+            List of StockQuote objects
+        """
+        quotes = []
+        for symbol in symbols:
+            try:
+                quote = self.get_quote(symbol)
+                quotes.append(quote)
+            except AlphaVantageError as e:
+                logger.warning(f"Failed to get quote for {symbol}: {e}")
+                continue
+        return quotes

@@ -104,3 +104,23 @@ class HealthResponse(BaseModel):
     status: str
     service: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now())
+
+class PerformerMetrics(BaseModel):
+    """Performance metrics for a single stock."""
+    symbol: str
+    name: Optional[str] = None
+    current_price: float
+    previous_close: float
+    change: float
+    change_percent: float
+    volume: int
+    period: str  # e.g., "1day", "5day", "1month"
+
+class TopPerformersResult(BaseModel):
+    """Results from top performers analysis."""
+    period: str
+    metric: str  # e.g., "change_percent", "volume"
+    performers: list[PerformerMetrics]
+    count: int
+    analyzed_count: int  # How many stocks were analyzed
+    retrieved_at: datetime = Field(default_factory=lambda: datetime.now())
