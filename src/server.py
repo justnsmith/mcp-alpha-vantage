@@ -9,7 +9,7 @@ from starlette.responses import JSONResponse
 from client import AlphaVantageClient, AlphaVantageError, RateLimitError
 from config import get_settings
 from models import DailyPrices, ErrorResponse, HealthResponse, SymbolSearchResult
-from models import TopPerformersResult, PerformerMetrics
+from models import TopPerformersResult, PerformerMetrics, MarketSummaryResult, MarketBreadth
 
 # Configure logging
 logging.basicConfig(
@@ -282,3 +282,94 @@ if __name__ == "__main__":
     except Exception:
         logger.exception("Server failed to start")
         raise
+
+# Default benchmark symbols representing broad market exposure
+_MARKET_BENCHMARKS = ["SPY", "QQQ", "DIA", "IWM", "VIX"]
+
+@mcp.tool
+def get_market_summary(symbols: str = "") -> str:
+    """
+    Get a broad market summary using benchmark ETFs and/or custom symbols.
+
+    Fetches quotes for SPY, QQQ, DIA, IWM, and VIX by default, then computes
+    aggregate stats: average change, total volume, top gainer/loser, and
+    advance/decline breadth.
+
+    Args:
+        symbols: Optional comma-separated list of additional symbols to include
+                 (e.g., 'AAPL,TSLA'). Leave empty for benchmarks only.
+
+    Returns:
+        JSON string with per-symbol metrics plus aggregate market statistics.
+    """
+    try:
+        # Build symbol list: benchmarks + any extras
+        extra = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+        symbol_list = list(dict.fromkeys(_MARKET_BENCHMARKS + extra))  # dedup, preserve order
+
+        logger.info(f"Fetching market summary for {symbol_list}")
+        quotes = client.get_batch_quotes(symbol_list)
+
+        if not quotes:
+            return format_error("Unable to fetch data for any market symbols")
+
+        # Build PerformerMetrics
+        performers: list[PerformerMetrics] = []
+        for quote in quotes:
+            try:
+                previous_close = float(quote.previous_close)
+                change = float(quote.change)
+                change_percent = (change / previous_close * 100) if previous_close > 0 else 0.0
+                performers.append(PerformerMetrics(
+                    symbol=quote.symbol,
+                    current_price=float(quote.price),
+                    previous_close=previous_close,
+                    change=change,
+                    change_percent=change_percent,
+                    volume=int(quote.volume),
+                    period="1day",
+                ))
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Skipping {quote.symbol} due to parse error: {e}")
+
+        if not performers:
+            return format_error("Unable to calculate metrics for any market symbols")
+
+        # Aggregate stats
+        avg_change = sum(p.change_percent for p in performers) / len(performers)
+        total_volume = sum(p.volume for p in performers)
+
+        sorted_by_change = sorted(performers, key=lambda x: x.change_percent)
+        top_gainer = sorted_by_change[-1]
+        top_loser = sorted_by_change[0]
+
+        advancing = sum(1 for p in performers if p.change_percent > 0)
+        declining = sum(1 for p in performers if p.change_percent < 0)
+        unchanged = len(performers) - advancing - declining
+        ad_ratio = (advancing / declining) if declining > 0 else None
+
+        result = MarketSummaryResult(
+            symbols_requested=symbol_list,
+            symbols_retrieved=len(performers),
+            average_change_percent=round(avg_change, 4),
+            total_volume=total_volume,
+            top_gainer=top_gainer,
+            top_loser=top_loser,
+            breadth=MarketBreadth(
+                advancing=advancing,
+                declining=declining,
+                unchanged=unchanged,
+                advance_decline_ratio=round(ad_ratio, 2) if ad_ratio is not None else None,
+            ),
+            quotes=performers,
+        )
+
+        return result.model_dump_json(indent=2)
+
+    except RateLimitError as e:
+        logger.warning(f"Rate limit reached: {e}")
+        return format_error(f"Rate limit reached: {str(e)}")
+
+    except Exception as e:
+        logger.exception("Unexpected error in get_market_summary")
+        return format_error(f"Unexpected error: {str(e)}")

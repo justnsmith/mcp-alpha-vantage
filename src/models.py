@@ -124,3 +124,23 @@ class TopPerformersResult(BaseModel):
     count: int
     analyzed_count: int  # How many stocks were analyzed
     retrieved_at: datetime = Field(default_factory=lambda: datetime.now())
+
+class MarketBreadth(BaseModel):
+    """Breadth statistics across a set of symbols."""
+    advancing: int
+    declining: int
+    unchanged: int
+    advance_decline_ratio: Optional[float] = None  # None if no decliners
+
+
+class MarketSummaryResult(BaseModel):
+    """Aggregated market summary across benchmark and/or custom symbols."""
+    symbols_requested: list[str]
+    symbols_retrieved: int
+    average_change_percent: float
+    total_volume: int
+    top_gainer: Optional[PerformerMetrics] = None
+    top_loser: Optional[PerformerMetrics] = None
+    breadth: MarketBreadth
+    quotes: list[PerformerMetrics]
+    retrieved_at: datetime = Field(default_factory=lambda: datetime.now())
