@@ -269,20 +269,6 @@ def analyze_top_performers(
         logger.exception("Unexpected error in analyze_top_performers")
         return format_error(f"Unexpected error: {str(e)}")
 
-# HTTP entrypoint
-app = mcp.http_app()
-
-# Stdio entrypoint
-if __name__ == "__main__":
-    try:
-        logger.info("Starting Alpha Vantage MCP Server...")
-        mcp.run()
-    except KeyboardInterrupt:
-        logger.info("Server stopped by user")
-    except Exception:
-        logger.exception("Server failed to start")
-        raise
-
 # Default benchmark symbols representing broad market exposure
 _MARKET_BENCHMARKS = ["SPY", "QQQ", "DIA", "IWM", "VIX"]
 
@@ -305,7 +291,7 @@ def get_market_summary(symbols: str = "") -> str:
     try:
         # Build symbol list: benchmarks + any extras
         extra = [s.strip().upper() for s in symbols.split(",") if s.strip()]
-        symbol_list = list(dict.fromkeys(_MARKET_BENCHMARKS + extra))  # dedup, preserve order
+        symbol_list = list(dict.fromkeys(_MARKET_BENCHMARKS + extra))
 
         logger.info(f"Fetching market summary for {symbol_list}")
         quotes = client.get_batch_quotes(symbol_list)
@@ -373,3 +359,18 @@ def get_market_summary(symbols: str = "") -> str:
     except Exception as e:
         logger.exception("Unexpected error in get_market_summary")
         return format_error(f"Unexpected error: {str(e)}")
+
+
+# HTTP entrypoint
+app = mcp.http_app()
+
+# Stdio entrypoint
+if __name__ == "__main__":
+    try:
+        logger.info("Starting Alpha Vantage MCP Server...")
+        mcp.run()
+    except KeyboardInterrupt:
+        logger.info("Server stopped by user")
+    except Exception:
+        logger.exception("Server failed to start")
+        raise
