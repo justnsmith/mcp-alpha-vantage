@@ -9,12 +9,18 @@ sys.path.insert(0, str(src_path))
 
 from models import StockQuote
 
-# FastMCP wraps tools as FunctionTool objects; access the underlying callable via .fn
+# FastMCP may wrap tools as FunctionTool objects (.fn) or return the plain
+# function depending on the version. Support both.
 import server
 
-compare_stocks = server.compare_stocks.fn
-screen_stocks = server.screen_stocks.fn
-get_portfolio_snapshot = server.get_portfolio_snapshot.fn
+
+def _unwrap(tool):
+    return getattr(tool, "fn", tool)
+
+
+compare_stocks = _unwrap(server.compare_stocks)
+screen_stocks = _unwrap(server.screen_stocks)
+get_portfolio_snapshot = _unwrap(server.get_portfolio_snapshot)
 
 
 # ---------------------------------------------------------------------------
