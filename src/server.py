@@ -429,7 +429,7 @@ def compare_stocks(symbols: str) -> str:
         sorted_by_change = sorted(performers, key=lambda x: x.change_percent)
         sorted_by_volume = sorted(performers, key=lambda x: x.volume, reverse=True)
         sorted_by_range = [p for p in performers if p.intraday_range_percent is not None]
-        sorted_by_range.sort(key=lambda x: x.intraday_range_percent, reverse=True)  # type: ignore[arg-type]
+        sorted_by_range.sort(key=lambda x: x.intraday_range_percent, reverse=True)
 
         result = StockComparison(
             symbols=[p.symbol for p in performers],
