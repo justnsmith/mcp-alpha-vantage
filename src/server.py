@@ -10,6 +10,7 @@ from client import AlphaVantageClient, AlphaVantageError, RateLimitError
 from config import get_settings
 from models import DailyPrices, ErrorResponse, HealthResponse, SymbolSearchResult
 from models import TopPerformersResult, PerformerMetrics, MarketSummaryResult, MarketBreadth
+from models import StockComparison, ScreenResult, PortfolioHolding, PortfolioSnapshot
 
 # Configure logging
 logging.basicConfig(
@@ -176,12 +177,9 @@ async def health_check(request: Request):
             status_code=500,
         )
 
+
 @mcp.tool
-def analyze_top_performers(
-    symbols: str,
-    limit: int = 10,
-    metric: str = "change_percent"
-) -> str:
+def analyze_top_performers(symbols: str, limit: int = 10, metric: str = "change_percent") -> str:
     """
     Analyze and rank stocks by performance metrics.
 
@@ -195,7 +193,7 @@ def analyze_top_performers(
     """
     try:
         # Parse symbols
-        symbol_list = [s.strip().upper() for s in symbols.split(',') if s.strip()]
+        symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
 
         if not symbol_list:
             return format_error("No symbols provided")
@@ -226,15 +224,17 @@ def analyze_top_performers(
 
                 change_percent = (change / previous_close * 100) if previous_close > 0 else 0.0
 
-                performers.append(PerformerMetrics(
-                    symbol=quote.symbol,
-                    current_price=current_price,
-                    previous_close=previous_close,
-                    change=change,
-                    change_percent=change_percent,
-                    volume=volume,
-                    period="1day"
-                ))
+                performers.append(
+                    PerformerMetrics(
+                        symbol=quote.symbol,
+                        current_price=current_price,
+                        previous_close=previous_close,
+                        change=change,
+                        change_percent=change_percent,
+                        volume=volume,
+                        period="1day",
+                    )
+                )
             except (ValueError, TypeError) as e:
                 logger.warning(f"Failed to parse metrics for {quote.symbol}: {e}")
                 continue
@@ -256,7 +256,7 @@ def analyze_top_performers(
             metric=metric,
             performers=top_performers,
             count=len(top_performers),
-            analyzed_count=len(performers)
+            analyzed_count=len(performers),
         )
 
         return result.model_dump_json(indent=2)
@@ -269,8 +269,10 @@ def analyze_top_performers(
         logger.exception("Unexpected error in analyze_top_performers")
         return format_error(f"Unexpected error: {str(e)}")
 
+
 # Default benchmark symbols representing broad market exposure
 _MARKET_BENCHMARKS = ["SPY", "QQQ", "DIA", "IWM", "VIX"]
+
 
 @mcp.tool
 def get_market_summary(symbols: str = "") -> str:
@@ -306,15 +308,17 @@ def get_market_summary(symbols: str = "") -> str:
                 previous_close = float(quote.previous_close)
                 change = float(quote.change)
                 change_percent = (change / previous_close * 100) if previous_close > 0 else 0.0
-                performers.append(PerformerMetrics(
-                    symbol=quote.symbol,
-                    current_price=float(quote.price),
-                    previous_close=previous_close,
-                    change=change,
-                    change_percent=change_percent,
-                    volume=int(quote.volume),
-                    period="1day",
-                ))
+                performers.append(
+                    PerformerMetrics(
+                        symbol=quote.symbol,
+                        current_price=float(quote.price),
+                        previous_close=previous_close,
+                        change=change,
+                        change_percent=change_percent,
+                        volume=int(quote.volume),
+                        period="1day",
+                    )
+                )
             except (ValueError, TypeError) as e:
                 logger.warning(f"Skipping {quote.symbol} due to parse error: {e}")
 
@@ -358,6 +362,311 @@ def get_market_summary(symbols: str = "") -> str:
 
     except Exception as e:
         logger.exception("Unexpected error in get_market_summary")
+        return format_error(f"Unexpected error: {str(e)}")
+
+
+@mcp.tool
+def compare_stocks(symbols: str) -> str:
+    """
+    Compare multiple stocks side-by-side with performance highlights.
+
+    Fetches current quotes for all provided symbols and returns them in a
+    unified view, calling out the highest gainer, biggest loser, highest
+    volume, and most intraday-volatile stock.
+
+    Args:
+        symbols: Comma-separated list of stock symbols (e.g., 'AAPL,MSFT,GOOGL,TSLA')
+
+    Returns:
+        JSON string with per-stock metrics and highlighted comparisons
+    """
+    try:
+        symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+
+        if not symbol_list:
+            return format_error("No symbols provided")
+
+        if len(symbol_list) > 50:
+            return format_error("Maximum 50 symbols allowed to respect rate limits")
+
+        logger.info(f"Comparing {len(symbol_list)} symbols")
+        raw_quotes = client.get_batch_quotes(symbol_list)
+
+        if not raw_quotes:
+            return format_error("Unable to fetch data for any of the provided symbols")
+
+        performers: list[PerformerMetrics] = []
+        for quote in raw_quotes:
+            try:
+                previous_close = float(quote.previous_close)
+                change = float(quote.change)
+                change_percent = (change / previous_close * 100) if previous_close > 0 else 0.0
+                high = float(quote.high)
+                low = float(quote.low)
+                intraday_range_pct = (
+                    ((high - low) / previous_close * 100) if previous_close > 0 else None
+                )
+                performers.append(
+                    PerformerMetrics(
+                        symbol=quote.symbol,
+                        current_price=float(quote.price),
+                        previous_close=previous_close,
+                        change=change,
+                        change_percent=change_percent,
+                        volume=int(quote.volume),
+                        period="1day",
+                        intraday_range_percent=(
+                            round(intraday_range_pct, 4) if intraday_range_pct is not None else None
+                        ),
+                    )
+                )
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Failed to parse metrics for {quote.symbol}: {e}")
+
+        if not performers:
+            return format_error("Unable to calculate metrics for any stocks")
+
+        sorted_by_change = sorted(performers, key=lambda x: x.change_percent)
+        sorted_by_volume = sorted(performers, key=lambda x: x.volume, reverse=True)
+        sorted_by_range = [p for p in performers if p.intraday_range_percent is not None]
+        sorted_by_range.sort(key=lambda x: x.intraday_range_percent, reverse=True)  # type: ignore[arg-type]
+
+        result = StockComparison(
+            symbols=[p.symbol for p in performers],
+            quotes=performers,
+            highest_gainer=sorted_by_change[-1],
+            biggest_loser=sorted_by_change[0],
+            highest_volume=sorted_by_volume[0],
+            most_volatile=sorted_by_range[0] if sorted_by_range else None,
+        )
+
+        return result.model_dump_json(indent=2)
+
+    except RateLimitError as e:
+        logger.warning(f"Rate limit reached: {e}")
+        return format_error(f"Rate limit reached: {str(e)}")
+
+    except Exception as e:
+        logger.exception("Unexpected error in compare_stocks")
+        return format_error(f"Unexpected error: {str(e)}")
+
+
+@mcp.tool
+def screen_stocks(
+    symbols: str,
+    min_change_percent: Optional[float] = None,
+    max_change_percent: Optional[float] = None,
+    min_volume: Optional[int] = None,
+    direction: str = "any",
+) -> str:
+    """
+    Screen a list of stocks by configurable criteria.
+
+    Fetches current quotes and filters to only the symbols that meet all
+    supplied thresholds. Useful for quick discovery of movers, high-volume
+    names, or pure gainers/losers within a watchlist.
+
+    Args:
+        symbols: Comma-separated list of stock symbols to screen
+        min_change_percent: Only include stocks with change% >= this value (e.g., 1.5)
+        max_change_percent: Only include stocks with change% <= this value (e.g., -1.0)
+        min_volume: Only include stocks with volume >= this value (e.g., 1000000)
+        direction: 'gainers' (change > 0), 'losers' (change < 0), or 'any' (default)
+
+    Returns:
+        JSON string with the matching stocks and a summary of criteria applied
+    """
+    try:
+        symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+
+        if not symbol_list:
+            return format_error("No symbols provided")
+
+        if len(symbol_list) > 50:
+            return format_error("Maximum 50 symbols allowed to respect rate limits")
+
+        if direction not in ("gainers", "losers", "any"):
+            return format_error("direction must be 'gainers', 'losers', or 'any'")
+
+        logger.info(f"Screening {len(symbol_list)} symbols")
+        raw_quotes = client.get_batch_quotes(symbol_list)
+
+        if not raw_quotes:
+            return format_error("Unable to fetch data for any of the provided symbols")
+
+        performers: list[PerformerMetrics] = []
+        for quote in raw_quotes:
+            try:
+                previous_close = float(quote.previous_close)
+                change = float(quote.change)
+                change_percent = (change / previous_close * 100) if previous_close > 0 else 0.0
+                performers.append(
+                    PerformerMetrics(
+                        symbol=quote.symbol,
+                        current_price=float(quote.price),
+                        previous_close=previous_close,
+                        change=change,
+                        change_percent=change_percent,
+                        volume=int(quote.volume),
+                        period="1day",
+                    )
+                )
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Failed to parse metrics for {quote.symbol}: {e}")
+
+        # Apply filters
+        criteria_parts: list[str] = []
+
+        def passes(p: PerformerMetrics) -> bool:
+            if direction == "gainers" and p.change_percent <= 0:
+                return False
+            if direction == "losers" and p.change_percent >= 0:
+                return False
+            if min_change_percent is not None and p.change_percent < min_change_percent:
+                return False
+            if max_change_percent is not None and p.change_percent > max_change_percent:
+                return False
+            if min_volume is not None and p.volume < min_volume:
+                return False
+            return True
+
+        if direction != "any":
+            criteria_parts.append(f"direction={direction}")
+        if min_change_percent is not None:
+            criteria_parts.append(f"change%>={min_change_percent}")
+        if max_change_percent is not None:
+            criteria_parts.append(f"change%<={max_change_percent}")
+        if min_volume is not None:
+            criteria_parts.append(f"volume>={min_volume}")
+
+        matched = [p for p in performers if passes(p)]
+        matched.sort(key=lambda x: x.change_percent, reverse=True)
+
+        criteria_str = (
+            ", ".join(criteria_parts) if criteria_parts else "none (all symbols returned)"
+        )
+
+        result = ScreenResult(
+            criteria_applied=criteria_str,
+            matched=matched,
+            matched_count=len(matched),
+            total_screened=len(performers),
+        )
+
+        return result.model_dump_json(indent=2)
+
+    except RateLimitError as e:
+        logger.warning(f"Rate limit reached: {e}")
+        return format_error(f"Rate limit reached: {str(e)}")
+
+    except Exception as e:
+        logger.exception("Unexpected error in screen_stocks")
+        return format_error(f"Unexpected error: {str(e)}")
+
+
+@mcp.tool
+def get_portfolio_snapshot(holdings: str) -> str:
+    """
+    Get a real-time snapshot of a stock portfolio with daily P&L.
+
+    Accepts holdings as a comma-separated list of SYMBOL:shares pairs,
+    fetches current quotes, and computes per-position market values and
+    daily profit/loss, plus portfolio-level totals.
+
+    Args:
+        holdings: Comma-separated SYMBOL:shares pairs
+                  (e.g., 'AAPL:10,MSFT:5,GOOGL:2')
+
+    Returns:
+        JSON string with per-holding metrics, total market value, and daily P&L
+    """
+    try:
+        # Parse holdings string
+        holding_map: dict[str, float] = {}
+        for part in holdings.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if ":" not in part:
+                return format_error(
+                    f"Invalid holdings format '{part}'. Use SYMBOL:shares (e.g., AAPL:10)"
+                )
+            symbol_raw, shares_raw = part.split(":", 1)
+            symbol = symbol_raw.strip().upper()
+            try:
+                shares = float(shares_raw.strip())
+            except ValueError:
+                return format_error(f"Invalid share count '{shares_raw}' for {symbol}")
+            if shares <= 0:
+                return format_error(f"Share count must be positive for {symbol}")
+            holding_map[symbol] = shares
+
+        if not holding_map:
+            return format_error("No valid holdings provided")
+
+        if len(holding_map) > 50:
+            return format_error("Maximum 50 symbols allowed to respect rate limits")
+
+        logger.info(f"Fetching portfolio snapshot for {list(holding_map.keys())}")
+        raw_quotes = client.get_batch_quotes(list(holding_map.keys()))
+
+        if not raw_quotes:
+            return format_error("Unable to fetch quotes for portfolio symbols")
+
+        portfolio_holdings: list[PortfolioHolding] = []
+        for quote in raw_quotes:
+            shares = holding_map.get(quote.symbol, 0.0)
+            try:
+                current_price = float(quote.price)
+                previous_close = float(quote.previous_close)
+                change = float(quote.change)
+                change_percent = (change / previous_close * 100) if previous_close > 0 else 0.0
+                market_value = current_price * shares
+                daily_pnl = change * shares
+
+                portfolio_holdings.append(
+                    PortfolioHolding(
+                        symbol=quote.symbol,
+                        shares=shares,
+                        current_price=current_price,
+                        market_value=round(market_value, 2),
+                        change=change,
+                        change_percent=round(change_percent, 4),
+                        daily_pnl=round(daily_pnl, 2),
+                    )
+                )
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Failed to parse holding for {quote.symbol}: {e}")
+
+        if not portfolio_holdings:
+            return format_error("Unable to calculate metrics for any portfolio holdings")
+
+        total_market_value = sum(h.market_value for h in portfolio_holdings)
+        total_daily_pnl = sum(h.daily_pnl for h in portfolio_holdings)
+        prior_total_value = total_market_value - total_daily_pnl
+        total_daily_pnl_percent = (
+            (total_daily_pnl / prior_total_value * 100) if prior_total_value > 0 else 0.0
+        )
+
+        sorted_by_pnl = sorted(portfolio_holdings, key=lambda h: h.daily_pnl)
+
+        result = PortfolioSnapshot(
+            total_market_value=round(total_market_value, 2),
+            total_daily_pnl=round(total_daily_pnl, 2),
+            total_daily_pnl_percent=round(total_daily_pnl_percent, 4),
+            holdings=portfolio_holdings,
+            top_contributor=sorted_by_pnl[-1],
+            top_detractor=sorted_by_pnl[0],
+        )
+
+        return result.model_dump_json(indent=2)
+
+    except RateLimitError as e:
+        logger.warning(f"Rate limit reached: {e}")
+        return format_error(f"Rate limit reached: {str(e)}")
+
+    except Exception as e:
+        logger.exception("Unexpected error in get_portfolio_snapshot")
         return format_error(f"Unexpected error: {str(e)}")
 
 

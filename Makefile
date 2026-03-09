@@ -3,7 +3,8 @@ help:
 	@echo "  make install      - Install production dependencies"
 	@echo "  make install-dev  - Install development dependencies"
 	@echo "  make test         - Run tests"
-	@echo "  make lint         - Run linters"
+	@echo "  make lint         - Run linters (ruff + black check)"
+	@echo "  make typecheck    - Run mypy type checker"
 	@echo "  make format       - Format code"
 	@echo "  make clean        - Clean up generated files"
 	@echo "  make run          - Run server in stdio mode"
@@ -21,6 +22,9 @@ test:
 lint:
 	ruff check src/ tests/
 	black --check src/ tests/
+
+typecheck:
+	mypy src/
 
 format:
 	black src/ tests/

@@ -105,8 +105,10 @@ class HealthResponse(BaseModel):
     service: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now())
 
+
 class PerformerMetrics(BaseModel):
     """Performance metrics for a single stock."""
+
     symbol: str
     name: Optional[str] = None
     current_price: float
@@ -115,9 +117,12 @@ class PerformerMetrics(BaseModel):
     change_percent: float
     volume: int
     period: str  # e.g., "1day", "5day", "1month"
+    intraday_range_percent: Optional[float] = None  # (high - low) / previous_close * 100
+
 
 class TopPerformersResult(BaseModel):
     """Results from top performers analysis."""
+
     period: str
     metric: str  # e.g., "change_percent", "volume"
     performers: list[PerformerMetrics]
@@ -125,8 +130,10 @@ class TopPerformersResult(BaseModel):
     analyzed_count: int  # How many stocks were analyzed
     retrieved_at: datetime = Field(default_factory=lambda: datetime.now())
 
+
 class MarketBreadth(BaseModel):
     """Breadth statistics across a set of symbols."""
+
     advancing: int
     declining: int
     unchanged: int
@@ -135,6 +142,7 @@ class MarketBreadth(BaseModel):
 
 class MarketSummaryResult(BaseModel):
     """Aggregated market summary across benchmark and/or custom symbols."""
+
     symbols_requested: list[str]
     symbols_retrieved: int
     average_change_percent: float
@@ -143,4 +151,50 @@ class MarketSummaryResult(BaseModel):
     top_loser: Optional[PerformerMetrics] = None
     breadth: MarketBreadth
     quotes: list[PerformerMetrics]
+    retrieved_at: datetime = Field(default_factory=lambda: datetime.now())
+
+
+class StockComparison(BaseModel):
+    """Side-by-side comparison of multiple stocks."""
+
+    symbols: list[str]
+    quotes: list[PerformerMetrics]
+    highest_gainer: Optional[PerformerMetrics] = None
+    biggest_loser: Optional[PerformerMetrics] = None
+    highest_volume: Optional[PerformerMetrics] = None
+    most_volatile: Optional[PerformerMetrics] = None
+    retrieved_at: datetime = Field(default_factory=lambda: datetime.now())
+
+
+class ScreenResult(BaseModel):
+    """Results from a stock screening operation."""
+
+    criteria_applied: str
+    matched: list[PerformerMetrics]
+    matched_count: int
+    total_screened: int
+    retrieved_at: datetime = Field(default_factory=lambda: datetime.now())
+
+
+class PortfolioHolding(BaseModel):
+    """Single holding in a portfolio snapshot."""
+
+    symbol: str
+    shares: float
+    current_price: float
+    market_value: float
+    change: float
+    change_percent: float
+    daily_pnl: float
+
+
+class PortfolioSnapshot(BaseModel):
+    """Aggregated snapshot of a stock portfolio."""
+
+    total_market_value: float
+    total_daily_pnl: float
+    total_daily_pnl_percent: float
+    holdings: list[PortfolioHolding]
+    top_contributor: Optional[PortfolioHolding] = None
+    top_detractor: Optional[PortfolioHolding] = None
     retrieved_at: datetime = Field(default_factory=lambda: datetime.now())
