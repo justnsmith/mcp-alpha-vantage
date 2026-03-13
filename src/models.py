@@ -198,3 +198,112 @@ class PortfolioSnapshot(BaseModel):
     top_contributor: Optional[PortfolioHolding] = None
     top_detractor: Optional[PortfolioHolding] = None
     retrieved_at: datetime = Field(default_factory=lambda: datetime.now())
+
+
+class CompanyOverview(BaseModel):
+    """Company fundamentals from Alpha Vantage OVERVIEW endpoint."""
+
+    symbol: str
+    name: str
+    description: str
+    exchange: str
+    currency: str
+    country: str
+    sector: str
+    industry: str
+    market_cap: Optional[str] = None
+    pe_ratio: Optional[str] = None
+    peg_ratio: Optional[str] = None
+    book_value: Optional[str] = None
+    dividend_yield: Optional[str] = None
+    eps: Optional[str] = None
+    profit_margin: Optional[str] = None
+    return_on_equity: Optional[str] = None
+    revenue_ttm: Optional[str] = None
+    beta: Optional[str] = None
+    week_52_high: Optional[str] = None
+    week_52_low: Optional[str] = None
+    moving_avg_50: Optional[str] = None
+    moving_avg_200: Optional[str] = None
+    analyst_target_price: Optional[str] = None
+    forward_pe: Optional[str] = None
+    price_to_book: Optional[str] = None
+    ev_to_ebitda: Optional[str] = None
+    retrieved_at: datetime = Field(default_factory=lambda: datetime.now())
+
+
+class TickerSentiment(BaseModel):
+    """Sentiment data for a specific ticker within a news article."""
+
+    ticker: str
+    relevance_score: str
+    sentiment_score: str
+    sentiment_label: str
+
+
+class NewsArticle(BaseModel):
+    """A single news article with sentiment data."""
+
+    title: str
+    url: str
+    time_published: str
+    source: str
+    summary: str
+    overall_sentiment_score: float
+    overall_sentiment_label: str
+    ticker_sentiment: list[TickerSentiment]
+
+
+class NewsSentimentResult(BaseModel):
+    """News and sentiment results from Alpha Vantage NEWS_SENTIMENT endpoint."""
+
+    tickers: Optional[str] = None
+    topics: Optional[str] = None
+    articles: list[NewsArticle]
+    count: int
+    retrieved_at: datetime = Field(default_factory=lambda: datetime.now())
+
+
+class IndicatorDataPoint(BaseModel):
+    """A single data point for a technical indicator."""
+
+    date: str
+    values: Dict[str, str]
+
+
+class TechnicalIndicatorResult(BaseModel):
+    """Technical indicator data from Alpha Vantage."""
+
+    symbol: str
+    indicator: str
+    interval: str
+    time_period: Optional[int] = None
+    recent_data: list[IndicatorDataPoint]
+    retrieved_at: datetime = Field(default_factory=lambda: datetime.now())
+
+
+class AnnualEarning(BaseModel):
+    """Annual earnings for a single fiscal year."""
+
+    fiscal_date_ending: str
+    reported_eps: Optional[str] = None
+
+
+class QuarterlyEarning(BaseModel):
+    """Quarterly earnings with estimate and surprise data."""
+
+    fiscal_date_ending: str
+    reported_date: Optional[str] = None
+    reported_eps: Optional[str] = None
+    estimated_eps: Optional[str] = None
+    surprise: Optional[str] = None
+    surprise_percentage: Optional[str] = None
+
+
+class EarningsResult(BaseModel):
+    """Earnings history from Alpha Vantage EARNINGS endpoint."""
+
+    symbol: str
+    annual_earnings: list[AnnualEarning]
+    quarterly_earnings: list[QuarterlyEarning]
+    retrieved_at: datetime = Field(default_factory=lambda: datetime.now())

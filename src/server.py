@@ -11,6 +11,7 @@ from config import get_settings
 from models import DailyPrices, ErrorResponse, HealthResponse, SymbolSearchResult
 from models import TopPerformersResult, PerformerMetrics, MarketSummaryResult, MarketBreadth
 from models import StockComparison, ScreenResult, PortfolioHolding, PortfolioSnapshot
+from models import CompanyOverview, NewsSentimentResult, TechnicalIndicatorResult, EarningsResult
 
 # Configure logging
 logging.basicConfig(
@@ -668,6 +669,157 @@ async def get_portfolio_snapshot(holdings: str) -> str:
     except Exception as e:
         logger.exception("Unexpected error in get_portfolio_snapshot")
         return format_error(f"Unexpected error: {str(e)}")
+
+
+@mcp.tool
+async def get_company_overview(symbol: str) -> str:
+    """
+    Get company fundamentals and key metrics for a stock.
+
+    Returns sector, industry, market cap, P/E ratio, EPS, beta, 52-week
+    high/low, moving averages, analyst target price, and more.
+
+    Args:
+        symbol: Stock ticker symbol (e.g., 'AAPL', 'MSFT')
+
+    Returns:
+        JSON string with company fundamentals and valuation metrics
+    """
+    try:
+        logger.info(f"Fetching company overview for {symbol}")
+        overview = await client.get_company_overview(symbol)
+        return overview.model_dump_json(indent=2)
+
+    except RateLimitError as e:
+        logger.warning(f"Rate limit reached: {e}")
+        return format_error(f"Rate limit reached: {str(e)}", symbol=symbol)
+
+    except AlphaVantageError as e:
+        logger.error(f"Error fetching overview for {symbol}: {e}")
+        return format_error(f"Error fetching overview: {str(e)}", symbol=symbol)
+
+    except Exception as e:
+        logger.exception(f"Unexpected error for {symbol}")
+        return format_error(f"Unexpected error: {str(e)}", symbol=symbol)
+
+
+@mcp.tool
+async def get_technical_indicator(
+    symbol: str,
+    indicator: str,
+    interval: str = "daily",
+    time_period: int = 14,
+) -> str:
+    """
+    Get technical indicator data for a stock.
+
+    Supported indicators:
+    - RSI: Relative Strength Index. Values above 70 suggest overbought,
+      below 30 oversold. Uses time_period.
+    - MACD: Moving Average Convergence Divergence. Returns MACD line,
+      signal line, and histogram. time_period is ignored.
+    - BBANDS: Bollinger Bands. Returns upper, middle, and lower bands.
+      Uses time_period.
+
+    Args:
+        symbol: Stock ticker symbol (e.g., 'AAPL')
+        indicator: One of 'RSI', 'MACD', 'BBANDS'
+        interval: 'daily', 'weekly', or 'monthly' (default: 'daily')
+        time_period: Lookback window for RSI/BBANDS (default: 14, ignored for MACD)
+
+    Returns:
+        JSON string with the 10 most recent data points
+    """
+    try:
+        logger.info(f"Fetching {indicator} for {symbol} ({interval}, period={time_period})")
+        result = await client.get_technical_indicator(symbol, indicator, interval, time_period)
+        return result.model_dump_json(indent=2)
+
+    except RateLimitError as e:
+        logger.warning(f"Rate limit reached: {e}")
+        return format_error(f"Rate limit reached: {str(e)}", symbol=symbol)
+
+    except AlphaVantageError as e:
+        logger.error(f"Error fetching {indicator} for {symbol}: {e}")
+        return format_error(f"Error fetching indicator: {str(e)}", symbol=symbol)
+
+    except Exception as e:
+        logger.exception(f"Unexpected error for {symbol}")
+        return format_error(f"Unexpected error: {str(e)}", symbol=symbol)
+
+
+@mcp.tool
+async def get_news_sentiment(
+    tickers: str = "",
+    topics: str = "",
+    limit: int = 10,
+) -> str:
+    """
+    Get recent news articles with sentiment scores.
+
+    Fetches news from Alpha Vantage and returns per-article sentiment
+    (Bullish / Somewhat-Bullish / Neutral / Somewhat-Bearish / Bearish)
+    plus per-ticker relevance and sentiment within each article.
+
+    At least one of tickers or topics should be provided for focused results.
+    If both are empty, returns general market news.
+
+    Args:
+        tickers: Comma-separated ticker symbols to filter news (e.g., 'AAPL,MSFT')
+        topics: Comma-separated topics (e.g., 'technology,earnings,ipo,mergers_and_acquisitions')
+        limit: Number of articles to return, 1-50 (default: 10)
+
+    Returns:
+        JSON string with articles, sentiment scores, and ticker relevance
+    """
+    try:
+        logger.info(f"Fetching news sentiment (tickers={tickers}, topics={topics}, limit={limit})")
+        result = await client.get_news_sentiment(tickers, topics, limit)
+        return result.model_dump_json(indent=2)
+
+    except RateLimitError as e:
+        logger.warning(f"Rate limit reached: {e}")
+        return format_error(f"Rate limit reached: {str(e)}")
+
+    except AlphaVantageError as e:
+        logger.error(f"Error fetching news sentiment: {e}")
+        return format_error(f"Error fetching news: {str(e)}")
+
+    except Exception as e:
+        logger.exception("Unexpected error in get_news_sentiment")
+        return format_error(f"Unexpected error: {str(e)}")
+
+
+@mcp.tool
+async def get_earnings(symbol: str) -> str:
+    """
+    Get earnings history for a stock (last 8 quarters and 5 annual periods).
+
+    Returns reported EPS, estimated EPS, earnings surprise, and surprise
+    percentage for each quarter, plus annual EPS going back 5 years.
+
+    Args:
+        symbol: Stock ticker symbol (e.g., 'AAPL', 'MSFT')
+
+    Returns:
+        JSON string with quarterly and annual earnings history
+    """
+    try:
+        logger.info(f"Fetching earnings for {symbol}")
+        result = await client.get_earnings(symbol)
+        return result.model_dump_json(indent=2)
+
+    except RateLimitError as e:
+        logger.warning(f"Rate limit reached: {e}")
+        return format_error(f"Rate limit reached: {str(e)}", symbol=symbol)
+
+    except AlphaVantageError as e:
+        logger.error(f"Error fetching earnings for {symbol}: {e}")
+        return format_error(f"Error fetching earnings: {str(e)}", symbol=symbol)
+
+    except Exception as e:
+        logger.exception(f"Unexpected error for {symbol}")
+        return format_error(f"Unexpected error: {str(e)}", symbol=symbol)
 
 
 # HTTP entrypoint

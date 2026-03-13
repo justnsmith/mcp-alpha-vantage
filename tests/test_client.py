@@ -8,7 +8,7 @@ src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
 from client import AlphaVantageClient, AlphaVantageError, RateLimitError
-from models import StockQuote, SymbolMatch
+from models import CompanyOverview, EarningsResult, NewsSentimentResult, StockQuote, SymbolMatch, TechnicalIndicatorResult
 
 
 @pytest.fixture
@@ -23,6 +23,10 @@ def mock_settings():
         settings.cache_ttl_quote = 60
         settings.cache_ttl_daily = 3600
         settings.cache_ttl_search = 86400
+        settings.cache_ttl_overview = 86400
+        settings.cache_ttl_indicator = 900
+        settings.cache_ttl_news = 900
+        settings.cache_ttl_earnings = 86400
         mock.return_value = settings
         yield settings
 
@@ -164,6 +168,182 @@ class TestAlphaVantageClient:
         assert result["symbol"] == "AAPL"
         assert result["total_days_available"] == 1
         assert "2024-01-15" in result["recent_days"]
+
+    @pytest.mark.asyncio
+    async def test_get_company_overview_success(self, client):
+        """Test successful company overview retrieval."""
+        client._http.get = AsyncMock(return_value=_make_mock_response({
+            "Symbol": "AAPL",
+            "Name": "Apple Inc.",
+            "Description": "Apple designs consumer electronics.",
+            "Exchange": "NASDAQ",
+            "Currency": "USD",
+            "Country": "USA",
+            "Sector": "TECHNOLOGY",
+            "Industry": "ELECTRONIC COMPUTERS",
+            "MarketCapitalization": "3000000000000",
+            "PERatio": "30.5",
+            "EPS": "6.12",
+            "Beta": "1.23",
+            "52WeekHigh": "200.00",
+            "52WeekLow": "150.00",
+        }))
+
+        result = await client.get_company_overview("AAPL")
+
+        assert isinstance(result, CompanyOverview)
+        assert result.symbol == "AAPL"
+        assert result.name == "Apple Inc."
+        assert result.sector == "TECHNOLOGY"
+        assert result.pe_ratio == "30.5"
+        assert result.beta == "1.23"
+
+    @pytest.mark.asyncio
+    async def test_get_company_overview_cache_hit(self, client):
+        """Second call for the same symbol should not make an HTTP request."""
+        client._http.get = AsyncMock(return_value=_make_mock_response({
+            "Symbol": "AAPL", "Name": "Apple Inc.", "Description": "", "Exchange": "NASDAQ",
+            "Currency": "USD", "Country": "USA", "Sector": "TECH", "Industry": "COMPUTERS",
+        }))
+
+        await client.get_company_overview("AAPL")
+        await client.get_company_overview("AAPL")
+
+        assert client._http.get.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_get_company_overview_no_data(self, client):
+        """Test overview with empty/missing response."""
+        client._http.get = AsyncMock(return_value=_make_mock_response({}))
+
+        with pytest.raises(AlphaVantageError, match="No overview data"):
+            await client.get_company_overview("FAKE")
+
+    @pytest.mark.asyncio
+    async def test_get_technical_indicator_rsi_success(self, client):
+        """Test successful RSI retrieval."""
+        client._http.get = AsyncMock(return_value=_make_mock_response({
+            "Technical Analysis: RSI": {
+                "2024-01-15": {"RSI": "62.34"},
+                "2024-01-12": {"RSI": "58.90"},
+            }
+        }))
+
+        result = await client.get_technical_indicator("AAPL", "RSI")
+
+        assert isinstance(result, TechnicalIndicatorResult)
+        assert result.symbol == "AAPL"
+        assert result.indicator == "RSI"
+        assert len(result.recent_data) == 2
+        assert result.recent_data[0].date == "2024-01-15"
+        assert "RSI" in result.recent_data[0].values
+
+    @pytest.mark.asyncio
+    async def test_get_technical_indicator_macd_success(self, client):
+        """Test successful MACD retrieval."""
+        client._http.get = AsyncMock(return_value=_make_mock_response({
+            "Technical Analysis: MACD": {
+                "2024-01-15": {
+                    "MACD": "1.23",
+                    "MACD_Signal": "0.98",
+                    "MACD_Hist": "0.25",
+                },
+            }
+        }))
+
+        result = await client.get_technical_indicator("AAPL", "macd")
+
+        assert result.indicator == "MACD"
+        assert result.time_period is None  # ignored for MACD
+        assert "MACD" in result.recent_data[0].values
+        assert "MACD_Signal" in result.recent_data[0].values
+
+    @pytest.mark.asyncio
+    async def test_get_technical_indicator_invalid(self, client):
+        """Test unsupported indicator raises an error."""
+        with pytest.raises(AlphaVantageError, match="Unsupported indicator"):
+            await client.get_technical_indicator("AAPL", "EMA")
+
+    @pytest.mark.asyncio
+    async def test_get_news_sentiment_success(self, client):
+        """Test successful news sentiment retrieval."""
+        client._http.get = AsyncMock(return_value=_make_mock_response({
+            "feed": [
+                {
+                    "title": "Apple reports record earnings",
+                    "url": "https://example.com/news/1",
+                    "time_published": "20240115T120000",
+                    "source": "Reuters",
+                    "summary": "Apple beat estimates...",
+                    "overall_sentiment_score": 0.35,
+                    "overall_sentiment_label": "Bullish",
+                    "ticker_sentiment": [
+                        {
+                            "ticker": "AAPL",
+                            "relevance_score": "0.9",
+                            "ticker_sentiment_score": "0.42",
+                            "ticker_sentiment_label": "Bullish",
+                        }
+                    ],
+                }
+            ]
+        }))
+
+        result = await client.get_news_sentiment(tickers="AAPL", limit=5)
+
+        assert isinstance(result, NewsSentimentResult)
+        assert result.count == 1
+        assert result.articles[0].title == "Apple reports record earnings"
+        assert result.articles[0].overall_sentiment_label == "Bullish"
+        assert result.articles[0].ticker_sentiment[0].ticker == "AAPL"
+
+    @pytest.mark.asyncio
+    async def test_get_news_sentiment_empty_feed(self, client):
+        """Test news sentiment with no articles returns empty result."""
+        client._http.get = AsyncMock(return_value=_make_mock_response({"feed": []}))
+
+        result = await client.get_news_sentiment(tickers="AAPL")
+
+        assert result.count == 0
+        assert result.articles == []
+
+    @pytest.mark.asyncio
+    async def test_get_earnings_success(self, client):
+        """Test successful earnings retrieval."""
+        client._http.get = AsyncMock(return_value=_make_mock_response({
+            "symbol": "AAPL",
+            "annualEarnings": [
+                {"fiscalDateEnding": "2023-09-30", "reportedEPS": "6.12"},
+                {"fiscalDateEnding": "2022-09-24", "reportedEPS": "6.11"},
+            ],
+            "quarterlyEarnings": [
+                {
+                    "fiscalDateEnding": "2023-09-30",
+                    "reportedDate": "2023-11-02",
+                    "reportedEPS": "1.46",
+                    "estimatedEPS": "1.39",
+                    "surprise": "0.07",
+                    "surprisePercentage": "5.03",
+                },
+            ],
+        }))
+
+        result = await client.get_earnings("AAPL")
+
+        assert isinstance(result, EarningsResult)
+        assert result.symbol == "AAPL"
+        assert len(result.annual_earnings) == 2
+        assert len(result.quarterly_earnings) == 1
+        assert result.quarterly_earnings[0].reported_eps == "1.46"
+        assert result.quarterly_earnings[0].surprise_percentage == "5.03"
+
+    @pytest.mark.asyncio
+    async def test_get_earnings_no_data(self, client):
+        """Test earnings with empty response raises error."""
+        client._http.get = AsyncMock(return_value=_make_mock_response({}))
+
+        with pytest.raises(AlphaVantageError, match="No earnings data"):
+            await client.get_earnings("FAKE")
 
     @pytest.mark.asyncio
     async def test_get_batch_quotes_concurrent(self, client):
