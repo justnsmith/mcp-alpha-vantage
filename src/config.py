@@ -21,24 +21,16 @@ class Settings(BaseSettings):
 
     # Cache TTLs (seconds)
     cache_ttl_quote: int = Field(default=60, description="TTL for stock quote cache", ge=0)
-    cache_ttl_daily: int = Field(
-        default=3600, description="TTL for daily price cache", ge=0
-    )
-    cache_ttl_search: int = Field(
-        default=86400, description="TTL for symbol search cache", ge=0
-    )
+    cache_ttl_daily: int = Field(default=3600, description="TTL for daily price cache", ge=0)
+    cache_ttl_search: int = Field(default=86400, description="TTL for symbol search cache", ge=0)
     cache_ttl_overview: int = Field(
         default=86400, description="TTL for company overview cache", ge=0
     )
     cache_ttl_indicator: int = Field(
         default=900, description="TTL for technical indicator cache", ge=0
     )
-    cache_ttl_news: int = Field(
-        default=900, description="TTL for news sentiment cache", ge=0
-    )
-    cache_ttl_earnings: int = Field(
-        default=86400, description="TTL for earnings cache", ge=0
-    )
+    cache_ttl_news: int = Field(default=900, description="TTL for news sentiment cache", ge=0)
+    cache_ttl_earnings: int = Field(default=86400, description="TTL for earnings cache", ge=0)
 
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).parent.parent / ".env"),  # Go up to root

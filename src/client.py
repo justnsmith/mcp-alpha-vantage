@@ -53,7 +53,9 @@ class AlphaVantageClient:
         self._daily_cache: TTLCache = TTLCache(maxsize=64, ttl=self.settings.cache_ttl_daily)
         self._search_cache: TTLCache = TTLCache(maxsize=128, ttl=self.settings.cache_ttl_search)
         self._overview_cache: TTLCache = TTLCache(maxsize=128, ttl=self.settings.cache_ttl_overview)
-        self._indicator_cache: TTLCache = TTLCache(maxsize=256, ttl=self.settings.cache_ttl_indicator)
+        self._indicator_cache: TTLCache = TTLCache(
+            maxsize=256, ttl=self.settings.cache_ttl_indicator
+        )
         self._news_cache: TTLCache = TTLCache(maxsize=64, ttl=self.settings.cache_ttl_news)
         self._earnings_cache: TTLCache = TTLCache(maxsize=128, ttl=self.settings.cache_ttl_earnings)
 
@@ -328,8 +330,7 @@ class AlphaVantageClient:
             interval=interval,
             time_period=time_period if indicator != "MACD" else None,
             recent_data=[
-                IndicatorDataPoint(date=date, values=time_series[date])
-                for date in recent_dates
+                IndicatorDataPoint(date=date, values=time_series[date]) for date in recent_dates
             ],
         )
 

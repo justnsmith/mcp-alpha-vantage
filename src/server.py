@@ -180,7 +180,9 @@ async def health_check(request: Request):
 
 
 @mcp.tool
-async def analyze_top_performers(symbols: str, limit: int = 10, metric: str = "change_percent") -> str:
+async def analyze_top_performers(
+    symbols: str, limit: int = 10, metric: str = "change_percent"
+) -> str:
     """
     Analyze and rank stocks by performance metrics.
 

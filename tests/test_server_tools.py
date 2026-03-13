@@ -86,9 +86,11 @@ class TestCompareStocks:
     @patch("server.client")
     async def test_compare_stocks_intraday_range(self, mock_client):
         """compare_stocks populates intraday_range_percent on each quote."""
-        mock_client.get_batch_quotes = AsyncMock(return_value=[
-            _make_quote("AAPL", "182.45", "2.34", "180.11", "1000000", "190.00", "170.00"),
-        ])
+        mock_client.get_batch_quotes = AsyncMock(
+            return_value=[
+                _make_quote("AAPL", "182.45", "2.34", "180.11", "1000000", "190.00", "170.00"),
+            ]
+        )
 
         result = json.loads(await compare_stocks("AAPL"))
 
@@ -101,10 +103,16 @@ class TestCompareStocks:
     @patch("server.client")
     async def test_compare_stocks_most_volatile(self, mock_client):
         """most_volatile reflects the widest intraday range."""
-        mock_client.get_batch_quotes = AsyncMock(return_value=[
-            _make_quote("AAPL", "100.00", "1.00", "99.00", "1000", "102.00", "98.00"),  # range 4
-            _make_quote("MSFT", "100.00", "1.00", "99.00", "1000", "115.00", "85.00"),  # range 30
-        ])
+        mock_client.get_batch_quotes = AsyncMock(
+            return_value=[
+                _make_quote(
+                    "AAPL", "100.00", "1.00", "99.00", "1000", "102.00", "98.00"
+                ),  # range 4
+                _make_quote(
+                    "MSFT", "100.00", "1.00", "99.00", "1000", "115.00", "85.00"
+                ),  # range 30
+            ]
+        )
 
         result = json.loads(await compare_stocks("AAPL,MSFT"))
 
@@ -270,10 +278,12 @@ class TestGetPortfolioSnapshot:
     @patch("server.client")
     async def test_snapshot_success(self, mock_client):
         """get_portfolio_snapshot computes market values and daily P&L."""
-        mock_client.get_batch_quotes = AsyncMock(return_value=[
-            _make_quote("AAPL", "182.45", "2.34", "180.11", "1000000", "183.00", "180.00"),
-            _make_quote("MSFT", "375.00", "-5.00", "380.00", "1000000", "378.00", "370.00"),
-        ])
+        mock_client.get_batch_quotes = AsyncMock(
+            return_value=[
+                _make_quote("AAPL", "182.45", "2.34", "180.11", "1000000", "183.00", "180.00"),
+                _make_quote("MSFT", "375.00", "-5.00", "380.00", "1000000", "378.00", "370.00"),
+            ]
+        )
 
         result = json.loads(await get_portfolio_snapshot("AAPL:10,MSFT:5"))
 
@@ -286,11 +296,13 @@ class TestGetPortfolioSnapshot:
     @patch("server.client")
     async def test_snapshot_top_contributor_and_detractor(self, mock_client):
         """top_contributor and top_detractor reflect the correct holdings."""
-        mock_client.get_batch_quotes = AsyncMock(return_value=[
-            _make_quote("AAPL", "182.45", "2.34", "180.11", "1000000", "183.00", "180.00"),
-            _make_quote("MSFT", "375.00", "-5.00", "380.00", "1000000", "378.00", "370.00"),
-            _make_quote("TSLA", "250.00", "10.00", "240.00", "1000000", "260.00", "245.00"),
-        ])
+        mock_client.get_batch_quotes = AsyncMock(
+            return_value=[
+                _make_quote("AAPL", "182.45", "2.34", "180.11", "1000000", "183.00", "180.00"),
+                _make_quote("MSFT", "375.00", "-5.00", "380.00", "1000000", "378.00", "370.00"),
+                _make_quote("TSLA", "250.00", "10.00", "240.00", "1000000", "260.00", "245.00"),
+            ]
+        )
 
         result = json.loads(await get_portfolio_snapshot("AAPL:10,MSFT:5,TSLA:20"))
 
@@ -303,9 +315,11 @@ class TestGetPortfolioSnapshot:
     @patch("server.client")
     async def test_snapshot_fractional_shares(self, mock_client):
         """get_portfolio_snapshot handles fractional share counts."""
-        mock_client.get_batch_quotes = AsyncMock(return_value=[
-            _make_quote("AAPL", "100.00", "10.00", "90.00", "1000", "105.00", "95.00"),
-        ])
+        mock_client.get_batch_quotes = AsyncMock(
+            return_value=[
+                _make_quote("AAPL", "100.00", "10.00", "90.00", "1000", "105.00", "95.00"),
+            ]
+        )
 
         result = json.loads(await get_portfolio_snapshot("AAPL:0.5"))
 

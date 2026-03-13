@@ -135,6 +135,7 @@ class TestGetCompanyOverview:
     @patch("server.client")
     async def test_overview_rate_limit(self, mock_client):
         from client import RateLimitError
+
         mock_client.get_company_overview = AsyncMock(side_effect=RateLimitError("limit hit"))
 
         result = json.loads(await get_company_overview("AAPL"))
@@ -145,6 +146,7 @@ class TestGetCompanyOverview:
     @patch("server.client")
     async def test_overview_api_error(self, mock_client):
         from client import AlphaVantageError
+
         mock_client.get_company_overview = AsyncMock(side_effect=AlphaVantageError("not found"))
 
         result = json.loads(await get_company_overview("FAKE"))
@@ -161,9 +163,7 @@ class TestGetTechnicalIndicator:
     @pytest.mark.asyncio
     @patch("server.client")
     async def test_rsi_success(self, mock_client):
-        mock_client.get_technical_indicator = AsyncMock(
-            return_value=_make_indicator_result("RSI")
-        )
+        mock_client.get_technical_indicator = AsyncMock(return_value=_make_indicator_result("RSI"))
 
         result = json.loads(await get_technical_indicator("AAPL", "RSI"))
 
@@ -200,6 +200,7 @@ class TestGetTechnicalIndicator:
     @patch("server.client")
     async def test_indicator_api_error(self, mock_client):
         from client import AlphaVantageError
+
         mock_client.get_technical_indicator = AsyncMock(
             side_effect=AlphaVantageError("Unsupported indicator 'EMA'")
         )
@@ -211,6 +212,7 @@ class TestGetTechnicalIndicator:
     @patch("server.client")
     async def test_indicator_rate_limit(self, mock_client):
         from client import RateLimitError
+
         mock_client.get_technical_indicator = AsyncMock(side_effect=RateLimitError("limit hit"))
 
         result = json.loads(await get_technical_indicator("AAPL", "RSI"))
@@ -253,6 +255,7 @@ class TestGetNewsSentiment:
     @patch("server.client")
     async def test_news_rate_limit(self, mock_client):
         from client import RateLimitError
+
         mock_client.get_news_sentiment = AsyncMock(side_effect=RateLimitError("limit hit"))
 
         result = json.loads(await get_news_sentiment(tickers="AAPL"))
@@ -284,6 +287,7 @@ class TestGetEarnings:
     @patch("server.client")
     async def test_earnings_rate_limit(self, mock_client):
         from client import RateLimitError
+
         mock_client.get_earnings = AsyncMock(side_effect=RateLimitError("limit hit"))
 
         result = json.loads(await get_earnings("AAPL"))
@@ -294,6 +298,7 @@ class TestGetEarnings:
     @patch("server.client")
     async def test_earnings_api_error(self, mock_client):
         from client import AlphaVantageError
+
         mock_client.get_earnings = AsyncMock(side_effect=AlphaVantageError("No earnings data"))
 
         result = json.loads(await get_earnings("FAKE"))

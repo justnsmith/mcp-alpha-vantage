@@ -8,7 +8,14 @@ src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
 from client import AlphaVantageClient, AlphaVantageError, RateLimitError
-from models import CompanyOverview, EarningsResult, NewsSentimentResult, StockQuote, SymbolMatch, TechnicalIndicatorResult
+from models import (
+    CompanyOverview,
+    EarningsResult,
+    NewsSentimentResult,
+    StockQuote,
+    SymbolMatch,
+    TechnicalIndicatorResult,
+)
 
 
 @pytest.fixture
@@ -56,20 +63,24 @@ class TestAlphaVantageClient:
     @pytest.mark.asyncio
     async def test_get_quote_success(self, client):
         """Test successful quote retrieval."""
-        client._http.get = AsyncMock(return_value=_make_mock_response({
-            "Global Quote": {
-                "01. symbol": "AAPL",
-                "05. price": "182.45",
-                "09. change": "2.34",
-                "10. change percent": "1.30%",
-                "06. volume": "52341234",
-                "07. latest trading day": "2024-01-15",
-                "08. previous close": "180.11",
-                "02. open": "180.50",
-                "03. high": "183.20",
-                "04. low": "179.80",
-            }
-        }))
+        client._http.get = AsyncMock(
+            return_value=_make_mock_response(
+                {
+                    "Global Quote": {
+                        "01. symbol": "AAPL",
+                        "05. price": "182.45",
+                        "09. change": "2.34",
+                        "10. change percent": "1.30%",
+                        "06. volume": "52341234",
+                        "07. latest trading day": "2024-01-15",
+                        "08. previous close": "180.11",
+                        "02. open": "180.50",
+                        "03. high": "183.20",
+                        "04. low": "179.80",
+                    }
+                }
+            )
+        )
 
         result = await client.get_quote("AAPL")
 
@@ -81,19 +92,23 @@ class TestAlphaVantageClient:
     @pytest.mark.asyncio
     async def test_get_quote_cache_hit(self, client):
         """Second call for the same symbol should not make an HTTP request."""
-        client._http.get = AsyncMock(return_value=_make_mock_response({
-            "Global Quote": {
-                "05. price": "182.45",
-                "09. change": "2.34",
-                "10. change percent": "1.30%",
-                "06. volume": "52341234",
-                "07. latest trading day": "2024-01-15",
-                "08. previous close": "180.11",
-                "02. open": "180.50",
-                "03. high": "183.20",
-                "04. low": "179.80",
-            }
-        }))
+        client._http.get = AsyncMock(
+            return_value=_make_mock_response(
+                {
+                    "Global Quote": {
+                        "05. price": "182.45",
+                        "09. change": "2.34",
+                        "10. change percent": "1.30%",
+                        "06. volume": "52341234",
+                        "07. latest trading day": "2024-01-15",
+                        "08. previous close": "180.11",
+                        "02. open": "180.50",
+                        "03. high": "183.20",
+                        "04. low": "179.80",
+                    }
+                }
+            )
+        )
 
         await client.get_quote("AAPL")
         await client.get_quote("AAPL")
@@ -111,9 +126,13 @@ class TestAlphaVantageClient:
     @pytest.mark.asyncio
     async def test_get_quote_rate_limit(self, client):
         """Test rate limit error handling."""
-        client._http.get = AsyncMock(return_value=_make_mock_response({
-            "Note": "Thank you for using Alpha Vantage! Our standard API call frequency is 5 calls per minute."
-        }))
+        client._http.get = AsyncMock(
+            return_value=_make_mock_response(
+                {
+                    "Note": "Thank you for using Alpha Vantage! Our standard API call frequency is 5 calls per minute."
+                }
+            )
+        )
 
         with pytest.raises(RateLimitError):
             await client.get_quote("AAPL")
@@ -121,17 +140,21 @@ class TestAlphaVantageClient:
     @pytest.mark.asyncio
     async def test_search_symbols_success(self, client):
         """Test successful symbol search."""
-        client._http.get = AsyncMock(return_value=_make_mock_response({
-            "bestMatches": [
+        client._http.get = AsyncMock(
+            return_value=_make_mock_response(
                 {
-                    "1. symbol": "AAPL",
-                    "2. name": "Apple Inc.",
-                    "3. type": "Equity",
-                    "4. region": "United States",
-                    "8. currency": "USD",
+                    "bestMatches": [
+                        {
+                            "1. symbol": "AAPL",
+                            "2. name": "Apple Inc.",
+                            "3. type": "Equity",
+                            "4. region": "United States",
+                            "8. currency": "USD",
+                        }
+                    ]
                 }
-            ]
-        }))
+            )
+        )
 
         results = await client.search_symbols("Apple")
 
@@ -151,17 +174,21 @@ class TestAlphaVantageClient:
     @pytest.mark.asyncio
     async def test_get_daily_prices_success(self, client):
         """Test successful daily prices retrieval."""
-        client._http.get = AsyncMock(return_value=_make_mock_response({
-            "Time Series (Daily)": {
-                "2024-01-15": {
-                    "1. open": "180.50",
-                    "2. high": "183.20",
-                    "3. low": "179.80",
-                    "4. close": "182.45",
-                    "5. volume": "52341234",
+        client._http.get = AsyncMock(
+            return_value=_make_mock_response(
+                {
+                    "Time Series (Daily)": {
+                        "2024-01-15": {
+                            "1. open": "180.50",
+                            "2. high": "183.20",
+                            "3. low": "179.80",
+                            "4. close": "182.45",
+                            "5. volume": "52341234",
+                        }
+                    }
                 }
-            }
-        }))
+            )
+        )
 
         result = await client.get_daily_prices("AAPL")
 
@@ -172,22 +199,26 @@ class TestAlphaVantageClient:
     @pytest.mark.asyncio
     async def test_get_company_overview_success(self, client):
         """Test successful company overview retrieval."""
-        client._http.get = AsyncMock(return_value=_make_mock_response({
-            "Symbol": "AAPL",
-            "Name": "Apple Inc.",
-            "Description": "Apple designs consumer electronics.",
-            "Exchange": "NASDAQ",
-            "Currency": "USD",
-            "Country": "USA",
-            "Sector": "TECHNOLOGY",
-            "Industry": "ELECTRONIC COMPUTERS",
-            "MarketCapitalization": "3000000000000",
-            "PERatio": "30.5",
-            "EPS": "6.12",
-            "Beta": "1.23",
-            "52WeekHigh": "200.00",
-            "52WeekLow": "150.00",
-        }))
+        client._http.get = AsyncMock(
+            return_value=_make_mock_response(
+                {
+                    "Symbol": "AAPL",
+                    "Name": "Apple Inc.",
+                    "Description": "Apple designs consumer electronics.",
+                    "Exchange": "NASDAQ",
+                    "Currency": "USD",
+                    "Country": "USA",
+                    "Sector": "TECHNOLOGY",
+                    "Industry": "ELECTRONIC COMPUTERS",
+                    "MarketCapitalization": "3000000000000",
+                    "PERatio": "30.5",
+                    "EPS": "6.12",
+                    "Beta": "1.23",
+                    "52WeekHigh": "200.00",
+                    "52WeekLow": "150.00",
+                }
+            )
+        )
 
         result = await client.get_company_overview("AAPL")
 
@@ -201,10 +232,20 @@ class TestAlphaVantageClient:
     @pytest.mark.asyncio
     async def test_get_company_overview_cache_hit(self, client):
         """Second call for the same symbol should not make an HTTP request."""
-        client._http.get = AsyncMock(return_value=_make_mock_response({
-            "Symbol": "AAPL", "Name": "Apple Inc.", "Description": "", "Exchange": "NASDAQ",
-            "Currency": "USD", "Country": "USA", "Sector": "TECH", "Industry": "COMPUTERS",
-        }))
+        client._http.get = AsyncMock(
+            return_value=_make_mock_response(
+                {
+                    "Symbol": "AAPL",
+                    "Name": "Apple Inc.",
+                    "Description": "",
+                    "Exchange": "NASDAQ",
+                    "Currency": "USD",
+                    "Country": "USA",
+                    "Sector": "TECH",
+                    "Industry": "COMPUTERS",
+                }
+            )
+        )
 
         await client.get_company_overview("AAPL")
         await client.get_company_overview("AAPL")
@@ -222,12 +263,16 @@ class TestAlphaVantageClient:
     @pytest.mark.asyncio
     async def test_get_technical_indicator_rsi_success(self, client):
         """Test successful RSI retrieval."""
-        client._http.get = AsyncMock(return_value=_make_mock_response({
-            "Technical Analysis: RSI": {
-                "2024-01-15": {"RSI": "62.34"},
-                "2024-01-12": {"RSI": "58.90"},
-            }
-        }))
+        client._http.get = AsyncMock(
+            return_value=_make_mock_response(
+                {
+                    "Technical Analysis: RSI": {
+                        "2024-01-15": {"RSI": "62.34"},
+                        "2024-01-12": {"RSI": "58.90"},
+                    }
+                }
+            )
+        )
 
         result = await client.get_technical_indicator("AAPL", "RSI")
 
@@ -241,15 +286,19 @@ class TestAlphaVantageClient:
     @pytest.mark.asyncio
     async def test_get_technical_indicator_macd_success(self, client):
         """Test successful MACD retrieval."""
-        client._http.get = AsyncMock(return_value=_make_mock_response({
-            "Technical Analysis: MACD": {
-                "2024-01-15": {
-                    "MACD": "1.23",
-                    "MACD_Signal": "0.98",
-                    "MACD_Hist": "0.25",
-                },
-            }
-        }))
+        client._http.get = AsyncMock(
+            return_value=_make_mock_response(
+                {
+                    "Technical Analysis: MACD": {
+                        "2024-01-15": {
+                            "MACD": "1.23",
+                            "MACD_Signal": "0.98",
+                            "MACD_Hist": "0.25",
+                        },
+                    }
+                }
+            )
+        )
 
         result = await client.get_technical_indicator("AAPL", "macd")
 
@@ -267,27 +316,31 @@ class TestAlphaVantageClient:
     @pytest.mark.asyncio
     async def test_get_news_sentiment_success(self, client):
         """Test successful news sentiment retrieval."""
-        client._http.get = AsyncMock(return_value=_make_mock_response({
-            "feed": [
+        client._http.get = AsyncMock(
+            return_value=_make_mock_response(
                 {
-                    "title": "Apple reports record earnings",
-                    "url": "https://example.com/news/1",
-                    "time_published": "20240115T120000",
-                    "source": "Reuters",
-                    "summary": "Apple beat estimates...",
-                    "overall_sentiment_score": 0.35,
-                    "overall_sentiment_label": "Bullish",
-                    "ticker_sentiment": [
+                    "feed": [
                         {
-                            "ticker": "AAPL",
-                            "relevance_score": "0.9",
-                            "ticker_sentiment_score": "0.42",
-                            "ticker_sentiment_label": "Bullish",
+                            "title": "Apple reports record earnings",
+                            "url": "https://example.com/news/1",
+                            "time_published": "20240115T120000",
+                            "source": "Reuters",
+                            "summary": "Apple beat estimates...",
+                            "overall_sentiment_score": 0.35,
+                            "overall_sentiment_label": "Bullish",
+                            "ticker_sentiment": [
+                                {
+                                    "ticker": "AAPL",
+                                    "relevance_score": "0.9",
+                                    "ticker_sentiment_score": "0.42",
+                                    "ticker_sentiment_label": "Bullish",
+                                }
+                            ],
                         }
-                    ],
+                    ]
                 }
-            ]
-        }))
+            )
+        )
 
         result = await client.get_news_sentiment(tickers="AAPL", limit=5)
 
@@ -310,23 +363,27 @@ class TestAlphaVantageClient:
     @pytest.mark.asyncio
     async def test_get_earnings_success(self, client):
         """Test successful earnings retrieval."""
-        client._http.get = AsyncMock(return_value=_make_mock_response({
-            "symbol": "AAPL",
-            "annualEarnings": [
-                {"fiscalDateEnding": "2023-09-30", "reportedEPS": "6.12"},
-                {"fiscalDateEnding": "2022-09-24", "reportedEPS": "6.11"},
-            ],
-            "quarterlyEarnings": [
+        client._http.get = AsyncMock(
+            return_value=_make_mock_response(
                 {
-                    "fiscalDateEnding": "2023-09-30",
-                    "reportedDate": "2023-11-02",
-                    "reportedEPS": "1.46",
-                    "estimatedEPS": "1.39",
-                    "surprise": "0.07",
-                    "surprisePercentage": "5.03",
-                },
-            ],
-        }))
+                    "symbol": "AAPL",
+                    "annualEarnings": [
+                        {"fiscalDateEnding": "2023-09-30", "reportedEPS": "6.12"},
+                        {"fiscalDateEnding": "2022-09-24", "reportedEPS": "6.11"},
+                    ],
+                    "quarterlyEarnings": [
+                        {
+                            "fiscalDateEnding": "2023-09-30",
+                            "reportedDate": "2023-11-02",
+                            "reportedEPS": "1.46",
+                            "estimatedEPS": "1.39",
+                            "surprise": "0.07",
+                            "surprisePercentage": "5.03",
+                        },
+                    ],
+                }
+            )
+        )
 
         result = await client.get_earnings("AAPL")
 
@@ -356,19 +413,21 @@ class TestAlphaVantageClient:
             symbol = params.get("symbol", "")
             if symbol == "BAD":
                 return _make_mock_response({"Global Quote": {}})
-            return _make_mock_response({
-                "Global Quote": {
-                    "05. price": "100.00",
-                    "09. change": "1.00",
-                    "10. change percent": "1.00%",
-                    "06. volume": "1000000",
-                    "07. latest trading day": "2024-01-15",
-                    "08. previous close": "99.00",
-                    "02. open": "99.50",
-                    "03. high": "101.00",
-                    "04. low": "98.00",
+            return _make_mock_response(
+                {
+                    "Global Quote": {
+                        "05. price": "100.00",
+                        "09. change": "1.00",
+                        "10. change percent": "1.00%",
+                        "06. volume": "1000000",
+                        "07. latest trading day": "2024-01-15",
+                        "08. previous close": "99.00",
+                        "02. open": "99.50",
+                        "03. high": "101.00",
+                        "04. low": "98.00",
+                    }
                 }
-            })
+            )
 
         client._http.get = mock_get
 
