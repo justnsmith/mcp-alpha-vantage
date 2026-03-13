@@ -219,28 +219,20 @@ async def analyze_top_performers(
         # Convert to PerformerMetrics
         performers = []
         for quote in quotes:
-            try:
-                current_price = float(quote.price)
-                previous_close = float(quote.previous_close)
-                change = float(quote.change)
-                volume = int(quote.volume)
-
-                change_percent = (change / previous_close * 100) if previous_close > 0 else 0.0
-
-                performers.append(
-                    PerformerMetrics(
-                        symbol=quote.symbol,
-                        current_price=current_price,
-                        previous_close=previous_close,
-                        change=change,
-                        change_percent=change_percent,
-                        volume=volume,
-                        period="1day",
-                    )
+            change_percent = (
+                (quote.change / quote.previous_close * 100) if quote.previous_close > 0 else 0.0
+            )
+            performers.append(
+                PerformerMetrics(
+                    symbol=quote.symbol,
+                    current_price=quote.price,
+                    previous_close=quote.previous_close,
+                    change=quote.change,
+                    change_percent=change_percent,
+                    volume=quote.volume,
+                    period="1day",
                 )
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Failed to parse metrics for {quote.symbol}: {e}")
-                continue
+            )
 
         if not performers:
             return format_error("Unable to calculate metrics for any stocks")
@@ -307,23 +299,20 @@ async def get_market_summary(symbols: str = "") -> str:
         # Build PerformerMetrics
         performers: list[PerformerMetrics] = []
         for quote in quotes:
-            try:
-                previous_close = float(quote.previous_close)
-                change = float(quote.change)
-                change_percent = (change / previous_close * 100) if previous_close > 0 else 0.0
-                performers.append(
-                    PerformerMetrics(
-                        symbol=quote.symbol,
-                        current_price=float(quote.price),
-                        previous_close=previous_close,
-                        change=change,
-                        change_percent=change_percent,
-                        volume=int(quote.volume),
-                        period="1day",
-                    )
+            change_percent = (
+                (quote.change / quote.previous_close * 100) if quote.previous_close > 0 else 0.0
+            )
+            performers.append(
+                PerformerMetrics(
+                    symbol=quote.symbol,
+                    current_price=quote.price,
+                    previous_close=quote.previous_close,
+                    change=quote.change,
+                    change_percent=change_percent,
+                    volume=quote.volume,
+                    period="1day",
                 )
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Skipping {quote.symbol} due to parse error: {e}")
+            )
 
         if not performers:
             return format_error("Unable to calculate metrics for any market symbols")
@@ -400,31 +389,28 @@ async def compare_stocks(symbols: str) -> str:
 
         performers: list[PerformerMetrics] = []
         for quote in raw_quotes:
-            try:
-                previous_close = float(quote.previous_close)
-                change = float(quote.change)
-                change_percent = (change / previous_close * 100) if previous_close > 0 else 0.0
-                high = float(quote.high)
-                low = float(quote.low)
-                intraday_range_pct = (
-                    ((high - low) / previous_close * 100) if previous_close > 0 else None
+            change_percent = (
+                (quote.change / quote.previous_close * 100) if quote.previous_close > 0 else 0.0
+            )
+            intraday_range_pct = (
+                ((quote.high - quote.low) / quote.previous_close * 100)
+                if quote.previous_close > 0
+                else None
+            )
+            performers.append(
+                PerformerMetrics(
+                    symbol=quote.symbol,
+                    current_price=quote.price,
+                    previous_close=quote.previous_close,
+                    change=quote.change,
+                    change_percent=change_percent,
+                    volume=quote.volume,
+                    period="1day",
+                    intraday_range_percent=(
+                        round(intraday_range_pct, 4) if intraday_range_pct is not None else None
+                    ),
                 )
-                performers.append(
-                    PerformerMetrics(
-                        symbol=quote.symbol,
-                        current_price=float(quote.price),
-                        previous_close=previous_close,
-                        change=change,
-                        change_percent=change_percent,
-                        volume=int(quote.volume),
-                        period="1day",
-                        intraday_range_percent=(
-                            round(intraday_range_pct, 4) if intraday_range_pct is not None else None
-                        ),
-                    )
-                )
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Failed to parse metrics for {quote.symbol}: {e}")
+            )
 
         if not performers:
             return format_error("Unable to calculate metrics for any stocks")
@@ -499,23 +485,20 @@ async def screen_stocks(
 
         performers: list[PerformerMetrics] = []
         for quote in raw_quotes:
-            try:
-                previous_close = float(quote.previous_close)
-                change = float(quote.change)
-                change_percent = (change / previous_close * 100) if previous_close > 0 else 0.0
-                performers.append(
-                    PerformerMetrics(
-                        symbol=quote.symbol,
-                        current_price=float(quote.price),
-                        previous_close=previous_close,
-                        change=change,
-                        change_percent=change_percent,
-                        volume=int(quote.volume),
-                        period="1day",
-                    )
+            change_percent = (
+                (quote.change / quote.previous_close * 100) if quote.previous_close > 0 else 0.0
+            )
+            performers.append(
+                PerformerMetrics(
+                    symbol=quote.symbol,
+                    current_price=quote.price,
+                    previous_close=quote.previous_close,
+                    change=quote.change,
+                    change_percent=change_percent,
+                    volume=quote.volume,
+                    period="1day",
                 )
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Failed to parse metrics for {quote.symbol}: {e}")
+            )
 
         # Apply filters
         criteria_parts: list[str] = []
@@ -619,27 +602,22 @@ async def get_portfolio_snapshot(holdings: str) -> str:
         portfolio_holdings: list[PortfolioHolding] = []
         for quote in raw_quotes:
             shares = holding_map.get(quote.symbol, 0.0)
-            try:
-                current_price = float(quote.price)
-                previous_close = float(quote.previous_close)
-                change = float(quote.change)
-                change_percent = (change / previous_close * 100) if previous_close > 0 else 0.0
-                market_value = current_price * shares
-                daily_pnl = change * shares
-
-                portfolio_holdings.append(
-                    PortfolioHolding(
-                        symbol=quote.symbol,
-                        shares=shares,
-                        current_price=current_price,
-                        market_value=round(market_value, 2),
-                        change=change,
-                        change_percent=round(change_percent, 4),
-                        daily_pnl=round(daily_pnl, 2),
-                    )
+            change_percent = (
+                (quote.change / quote.previous_close * 100) if quote.previous_close > 0 else 0.0
+            )
+            market_value = quote.price * shares
+            daily_pnl = quote.change * shares
+            portfolio_holdings.append(
+                PortfolioHolding(
+                    symbol=quote.symbol,
+                    shares=shares,
+                    current_price=quote.price,
+                    market_value=round(market_value, 2),
+                    change=quote.change,
+                    change_percent=round(change_percent, 4),
+                    daily_pnl=round(daily_pnl, 2),
                 )
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Failed to parse holding for {quote.symbol}: {e}")
+            )
 
         if not portfolio_holdings:
             return format_error("Unable to calculate metrics for any portfolio holdings")

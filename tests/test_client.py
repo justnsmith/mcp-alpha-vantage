@@ -86,8 +86,8 @@ class TestAlphaVantageClient:
 
         assert isinstance(result, StockQuote)
         assert result.symbol == "AAPL"
-        assert result.price == "182.45"
-        assert result.change == "2.34"
+        assert result.price == 182.45
+        assert result.change == 2.34
 
     @pytest.mark.asyncio
     async def test_get_quote_cache_hit(self, client):

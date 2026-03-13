@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class StockQuote(BaseModel):
@@ -11,30 +11,37 @@ class StockQuote(BaseModel):
         json_schema_extra={
             "example": {
                 "symbol": "AAPL",
-                "price": "182.45",
-                "change": "2.34",
-                "change_percent": "1.30%",
-                "volume": "52341234",
+                "price": 182.45,
+                "change": 2.34,
+                "change_percent": 1.30,
+                "volume": 52341234,
                 "latest_trading_day": "2024-01-15",
-                "previous_close": "180.11",
-                "open": "180.50",
-                "high": "183.20",
-                "low": "179.80",
+                "previous_close": 180.11,
+                "open": 180.50,
+                "high": 183.20,
+                "low": 179.80,
             }
         }
     )
 
     symbol: str
-    price: str
-    change: str
-    change_percent: str
-    volume: str
+    price: float
+    change: float
+    change_percent: float
+    volume: int
     latest_trading_day: str
-    previous_close: str
-    open: str
-    high: str
-    low: str
+    previous_close: float
+    open: float
+    high: float
+    low: float
     retrieved_at: datetime = Field(default_factory=lambda: datetime.now())
+
+    @field_validator("change_percent", mode="before")
+    @classmethod
+    def parse_change_percent(cls, v: Any) -> float:
+        if isinstance(v, str):
+            return float(v.rstrip("%"))
+        return float(v)
 
 
 class DailyPrice(BaseModel):
