@@ -11,7 +11,6 @@ from config import get_settings
 from models import DailyPrices, ErrorResponse, HealthResponse, SymbolSearchResult
 from models import TopPerformersResult, PerformerMetrics, MarketSummaryResult, MarketBreadth
 from models import StockComparison, ScreenResult, PortfolioHolding, PortfolioSnapshot
-from models import CompanyOverview, NewsSentimentResult, TechnicalIndicatorResult, EarningsResult
 
 # Configure logging
 logging.basicConfig(
