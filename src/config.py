@@ -19,6 +19,15 @@ class Settings(BaseSettings):
     )
     max_retries: int = Field(default=3, description="Maximum number of retries", ge=0, le=5)
 
+    # Cache TTLs (seconds)
+    cache_ttl_quote: int = Field(default=60, description="TTL for stock quote cache", ge=0)
+    cache_ttl_daily: int = Field(
+        default=3600, description="TTL for daily price cache", ge=0
+    )
+    cache_ttl_search: int = Field(
+        default=86400, description="TTL for symbol search cache", ge=0
+    )
+
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).parent.parent / ".env"),  # Go up to root
         env_file_encoding="utf-8",

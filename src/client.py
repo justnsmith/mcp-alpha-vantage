@@ -1,7 +1,10 @@
 import logging
+import threading
 from typing import Any, Dict
 
 import requests
+from cachetools import TTLCache, cachedmethod
+from cachetools.keys import hashkey
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -30,6 +33,10 @@ class AlphaVantageClient:
         """Initialize the Alpha Vantage client."""
         self.settings = get_settings()
         self.session = self._create_session()
+        self._lock = threading.Lock()
+        self._quote_cache: TTLCache = TTLCache(maxsize=256, ttl=self.settings.cache_ttl_quote)
+        self._daily_cache: TTLCache = TTLCache(maxsize=64, ttl=self.settings.cache_ttl_daily)
+        self._search_cache: TTLCache = TTLCache(maxsize=128, ttl=self.settings.cache_ttl_search)
 
     def _create_session(self) -> requests.Session:
         """Create a requests session with retry logic."""
@@ -90,6 +97,11 @@ class AlphaVantageClient:
         except requests.exceptions.RequestException as e:
             raise AlphaVantageError(f"Request failed: {str(e)}")
 
+    @cachedmethod(
+        lambda self: self._quote_cache,
+        key=lambda self, symbol: hashkey(symbol.upper()),
+        lock=lambda self: self._lock,
+    )
     def get_quote(self, symbol: str) -> StockQuote:
         """
         Get real-time stock quote.
@@ -121,6 +133,11 @@ class AlphaVantageClient:
             low=quote_data.get("04. low", "N/A"),
         )
 
+    @cachedmethod(
+        lambda self: self._daily_cache,
+        key=lambda self, symbol, outputsize="compact": hashkey(symbol.upper(), outputsize),
+        lock=lambda self: self._lock,
+    )
     def get_daily_prices(self, symbol: str, outputsize: str = "compact") -> Dict[str, Any]:
         """
         Get daily historical prices.
@@ -159,6 +176,11 @@ class AlphaVantageClient:
             "total_days_available": len(time_series),
         }
 
+    @cachedmethod(
+        lambda self: self._search_cache,
+        key=lambda self, keywords: hashkey(keywords.lower()),
+        lock=lambda self: self._lock,
+    )
     def search_symbols(self, keywords: str) -> list[SymbolMatch]:
         """
         Search for stock symbols by keywords.
