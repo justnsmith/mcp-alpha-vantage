@@ -1,12 +1,11 @@
+import asyncio
 import logging
 import threading
 from typing import Any, Dict
 
-import requests
-from cachetools import TTLCache, cachedmethod
+import httpx
+from cachetools import TTLCache
 from cachetools.keys import hashkey
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 from config import get_settings
 from models import DailyPrice, StockQuote, SymbolMatch
@@ -32,31 +31,16 @@ class AlphaVantageClient:
     def __init__(self):
         """Initialize the Alpha Vantage client."""
         self.settings = get_settings()
-        self.session = self._create_session()
+        self._http = httpx.AsyncClient(
+            transport=httpx.AsyncHTTPTransport(retries=self.settings.max_retries),
+            timeout=self.settings.request_timeout,
+        )
         self._lock = threading.Lock()
         self._quote_cache: TTLCache = TTLCache(maxsize=256, ttl=self.settings.cache_ttl_quote)
         self._daily_cache: TTLCache = TTLCache(maxsize=64, ttl=self.settings.cache_ttl_daily)
         self._search_cache: TTLCache = TTLCache(maxsize=128, ttl=self.settings.cache_ttl_search)
 
-    def _create_session(self) -> requests.Session:
-        """Create a requests session with retry logic."""
-        session = requests.Session()
-
-        # Configure retries
-        retry_strategy = Retry(
-            total=self.settings.max_retries,
-            backoff_factor=1,
-            status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["GET"],
-        )
-
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-        session.mount("https://", adapter)
-        session.mount("http://", adapter)
-
-        return session
-
-    def _make_request(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def _make_request(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Make a request to the Alpha Vantage API.
 
@@ -70,20 +54,17 @@ class AlphaVantageClient:
             RateLimitError: If rate limit is exceeded
             AlphaVantageError: For other API errors
         """
-        # Add API key to params
-        params["apikey"] = self.settings.alpha_vantage_api_key
+        params = {**params, "apikey": self.settings.alpha_vantage_api_key}
 
         try:
             logger.debug(f"Making request with params: {params}")
-            response = self.session.get(
+            response = await self._http.get(
                 self.settings.alpha_vantage_base_url,
                 params=params,
-                timeout=self.settings.request_timeout,
             )
             response.raise_for_status()
             data = response.json()
 
-            # Check for API-specific errors
             if "Error Message" in data:
                 raise AlphaVantageError(f"API Error: {data['Error Message']}")
 
@@ -92,17 +73,16 @@ class AlphaVantageClient:
 
             return data
 
-        except requests.exceptions.Timeout:
+        except (AlphaVantageError, RateLimitError):
+            raise
+        except httpx.TimeoutException:
             raise AlphaVantageError("Request timed out")
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPStatusError as e:
+            raise AlphaVantageError(f"HTTP error: {e.response.status_code}")
+        except httpx.HTTPError as e:
             raise AlphaVantageError(f"Request failed: {str(e)}")
 
-    @cachedmethod(
-        lambda self: self._quote_cache,
-        key=lambda self, symbol: hashkey(symbol.upper()),
-        lock=lambda self: self._lock,
-    )
-    def get_quote(self, symbol: str) -> StockQuote:
+    async def get_quote(self, symbol: str) -> StockQuote:
         """
         Get real-time stock quote.
 
@@ -112,15 +92,20 @@ class AlphaVantageClient:
         Returns:
             StockQuote object with current market data
         """
-        params = {"function": "GLOBAL_QUOTE", "symbol": symbol.upper()}
+        key = hashkey(symbol.upper())
+        with self._lock:
+            if key in self._quote_cache:
+                logger.debug(f"Cache hit: quote {symbol}")
+                return self._quote_cache[key]
 
-        data = self._make_request(params)
+        params = {"function": "GLOBAL_QUOTE", "symbol": symbol.upper()}
+        data = await self._make_request(params)
         quote_data = data.get("Global Quote", {})
 
         if not quote_data:
             raise AlphaVantageError(f"No data found for symbol {symbol}")
 
-        return StockQuote(
+        result = StockQuote(
             symbol=symbol.upper(),
             price=quote_data.get("05. price", "N/A"),
             change=quote_data.get("09. change", "N/A"),
@@ -133,12 +118,11 @@ class AlphaVantageClient:
             low=quote_data.get("04. low", "N/A"),
         )
 
-    @cachedmethod(
-        lambda self: self._daily_cache,
-        key=lambda self, symbol, outputsize="compact": hashkey(symbol.upper(), outputsize),
-        lock=lambda self: self._lock,
-    )
-    def get_daily_prices(self, symbol: str, outputsize: str = "compact") -> Dict[str, Any]:
+        with self._lock:
+            self._quote_cache[key] = result
+        return result
+
+    async def get_daily_prices(self, symbol: str, outputsize: str = "compact") -> Dict[str, Any]:
         """
         Get daily historical prices.
 
@@ -149,39 +133,36 @@ class AlphaVantageClient:
         Returns:
             Dictionary with recent days and metadata
         """
+        key = hashkey(symbol.upper(), outputsize)
+        with self._lock:
+            if key in self._daily_cache:
+                logger.debug(f"Cache hit: daily prices {symbol}")
+                return self._daily_cache[key]
+
         params = {
             "function": "TIME_SERIES_DAILY",
             "symbol": symbol.upper(),
             "outputsize": outputsize,
         }
-
-        data = self._make_request(params)
+        data = await self._make_request(params)
         time_series = data.get("Time Series (Daily)", {})
 
         if not time_series:
             raise AlphaVantageError(f"No daily data found for {symbol}")
 
-        # Parse and sort dates
-        parsed_series = {}
-        for date, values in time_series.items():
-            parsed_series[date] = DailyPrice(**values)
-
-        # Get the 5 most recent days
+        parsed_series = {date: DailyPrice(**values) for date, values in time_series.items()}
         recent_dates = sorted(parsed_series.keys(), reverse=True)[:5]
-        recent_data = {date: parsed_series[date] for date in recent_dates}
-
-        return {
+        result = {
             "symbol": symbol.upper(),
-            "recent_days": recent_data,
+            "recent_days": {date: parsed_series[date] for date in recent_dates},
             "total_days_available": len(time_series),
         }
 
-    @cachedmethod(
-        lambda self: self._search_cache,
-        key=lambda self, keywords: hashkey(keywords.lower()),
-        lock=lambda self: self._lock,
-    )
-    def search_symbols(self, keywords: str) -> list[SymbolMatch]:
+        with self._lock:
+            self._daily_cache[key] = result
+        return result
+
+    async def search_symbols(self, keywords: str) -> list[SymbolMatch]:
         """
         Search for stock symbols by keywords.
 
@@ -191,45 +172,52 @@ class AlphaVantageClient:
         Returns:
             List of matching symbols
         """
-        params = {"function": "SYMBOL_SEARCH", "keywords": keywords}
+        key = hashkey(keywords.lower())
+        with self._lock:
+            if key in self._search_cache:
+                logger.debug(f"Cache hit: search '{keywords}'")
+                return self._search_cache[key]
 
-        data = self._make_request(params)
+        params = {"function": "SYMBOL_SEARCH", "keywords": keywords}
+        data = await self._make_request(params)
         matches = data.get("bestMatches", [])
 
         if not matches:
             raise AlphaVantageError(f"No symbols found for '{keywords}'")
 
-        # Parse matches
-        results = []
-        for match in matches[:10]:
-            results.append(
-                SymbolMatch(
-                    symbol=match.get("1. symbol", ""),
-                    name=match.get("2. name", ""),
-                    type=match.get("3. type", ""),
-                    region=match.get("4. region", ""),
-                    currency=match.get("8. currency", ""),
-                )
+        results = [
+            SymbolMatch(
+                symbol=m.get("1. symbol", ""),
+                name=m.get("2. name", ""),
+                type=m.get("3. type", ""),
+                region=m.get("4. region", ""),
+                currency=m.get("8. currency", ""),
             )
+            for m in matches[:10]
+        ]
 
+        with self._lock:
+            self._search_cache[key] = results
         return results
 
-    def get_batch_quotes(self, symbols: list[str]) -> list[StockQuote]:
+    async def get_batch_quotes(self, symbols: list[str]) -> list[StockQuote]:
         """
-        Get quotes for multiple symbols.
+        Get quotes for multiple symbols concurrently.
 
         Args:
             symbols: List of stock ticker symbols
 
         Returns:
-            List of StockQuote objects
+            List of StockQuote objects (failed symbols are skipped with a warning)
         """
+        results = await asyncio.gather(
+            *[self.get_quote(s) for s in symbols],
+            return_exceptions=True,
+        )
         quotes = []
-        for symbol in symbols:
-            try:
-                quote = self.get_quote(symbol)
-                quotes.append(quote)
-            except AlphaVantageError as e:
-                logger.warning(f"Failed to get quote for {symbol}: {e}")
-                continue
+        for symbol, result in zip(symbols, results):
+            if isinstance(result, Exception):
+                logger.warning(f"Failed to get quote for {symbol}: {result}")
+            else:
+                quotes.append(result)
         return quotes

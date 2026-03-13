@@ -38,7 +38,7 @@ def format_error(error: str, symbol: Optional[str] = None, query: Optional[str] 
 
 
 @mcp.tool
-def get_stock_quote(symbol: str) -> str:
+async def get_stock_quote(symbol: str) -> str:
     """
     Get real-time stock quote for a symbol.
 
@@ -50,7 +50,7 @@ def get_stock_quote(symbol: str) -> str:
     """
     try:
         logger.info(f"Fetching quote for {symbol}")
-        quote = client.get_quote(symbol)
+        quote = await client.get_quote(symbol)
         return quote.model_dump_json(indent=2)
 
     except RateLimitError as e:
@@ -67,7 +67,7 @@ def get_stock_quote(symbol: str) -> str:
 
 
 @mcp.tool
-def get_daily_prices(symbol: str, outputsize: str = "compact") -> str:
+async def get_daily_prices(symbol: str, outputsize: str = "compact") -> str:
     """
     Get daily historical prices for a stock.
 
@@ -88,7 +88,7 @@ def get_daily_prices(symbol: str, outputsize: str = "compact") -> str:
                 symbol=symbol,
             )
 
-        data = client.get_daily_prices(symbol, outputsize)
+        data = await client.get_daily_prices(symbol, outputsize)
 
         # Convert DailyPrice objects to dicts for JSON serialization
         recent_days_dict = {}
@@ -118,7 +118,7 @@ def get_daily_prices(symbol: str, outputsize: str = "compact") -> str:
 
 
 @mcp.tool
-def search_symbol(keywords: str) -> str:
+async def search_symbol(keywords: str) -> str:
     """
     Search for stock symbols by company name or keywords.
 
@@ -130,7 +130,7 @@ def search_symbol(keywords: str) -> str:
     """
     try:
         logger.info(f"Searching for symbols with keywords: {keywords}")
-        matches = client.search_symbols(keywords)
+        matches = await client.search_symbols(keywords)
 
         result = SymbolSearchResult(
             query=keywords,
@@ -179,7 +179,7 @@ async def health_check(request: Request):
 
 
 @mcp.tool
-def analyze_top_performers(symbols: str, limit: int = 10, metric: str = "change_percent") -> str:
+async def analyze_top_performers(symbols: str, limit: int = 10, metric: str = "change_percent") -> str:
     """
     Analyze and rank stocks by performance metrics.
 
@@ -208,7 +208,7 @@ def analyze_top_performers(symbols: str, limit: int = 10, metric: str = "change_
         logger.info(f"Analyzing {len(symbol_list)} symbols for top performers by {metric}")
 
         # Fetch quotes for all symbols
-        quotes = client.get_batch_quotes(symbol_list)
+        quotes = await client.get_batch_quotes(symbol_list)
 
         if not quotes:
             return format_error("Unable to fetch data for any of the provided symbols")
@@ -275,7 +275,7 @@ _MARKET_BENCHMARKS = ["SPY", "QQQ", "DIA", "IWM", "VIX"]
 
 
 @mcp.tool
-def get_market_summary(symbols: str = "") -> str:
+async def get_market_summary(symbols: str = "") -> str:
     """
     Get a broad market summary using benchmark ETFs and/or custom symbols.
 
@@ -296,7 +296,7 @@ def get_market_summary(symbols: str = "") -> str:
         symbol_list = list(dict.fromkeys(_MARKET_BENCHMARKS + extra))
 
         logger.info(f"Fetching market summary for {symbol_list}")
-        quotes = client.get_batch_quotes(symbol_list)
+        quotes = await client.get_batch_quotes(symbol_list)
 
         if not quotes:
             return format_error("Unable to fetch data for any market symbols")
@@ -366,7 +366,7 @@ def get_market_summary(symbols: str = "") -> str:
 
 
 @mcp.tool
-def compare_stocks(symbols: str) -> str:
+async def compare_stocks(symbols: str) -> str:
     """
     Compare multiple stocks side-by-side with performance highlights.
 
@@ -390,7 +390,7 @@ def compare_stocks(symbols: str) -> str:
             return format_error("Maximum 50 symbols allowed to respect rate limits")
 
         logger.info(f"Comparing {len(symbol_list)} symbols")
-        raw_quotes = client.get_batch_quotes(symbol_list)
+        raw_quotes = await client.get_batch_quotes(symbol_list)
 
         if not raw_quotes:
             return format_error("Unable to fetch data for any of the provided symbols")
@@ -452,7 +452,7 @@ def compare_stocks(symbols: str) -> str:
 
 
 @mcp.tool
-def screen_stocks(
+async def screen_stocks(
     symbols: str,
     min_change_percent: Optional[float] = None,
     max_change_percent: Optional[float] = None,
@@ -489,7 +489,7 @@ def screen_stocks(
             return format_error("direction must be 'gainers', 'losers', or 'any'")
 
         logger.info(f"Screening {len(symbol_list)} symbols")
-        raw_quotes = client.get_batch_quotes(symbol_list)
+        raw_quotes = await client.get_batch_quotes(symbol_list)
 
         if not raw_quotes:
             return format_error("Unable to fetch data for any of the provided symbols")
@@ -565,7 +565,7 @@ def screen_stocks(
 
 
 @mcp.tool
-def get_portfolio_snapshot(holdings: str) -> str:
+async def get_portfolio_snapshot(holdings: str) -> str:
     """
     Get a real-time snapshot of a stock portfolio with daily P&L.
 
@@ -608,7 +608,7 @@ def get_portfolio_snapshot(holdings: str) -> str:
             return format_error("Maximum 50 symbols allowed to respect rate limits")
 
         logger.info(f"Fetching portfolio snapshot for {list(holding_map.keys())}")
-        raw_quotes = client.get_batch_quotes(list(holding_map.keys()))
+        raw_quotes = await client.get_batch_quotes(list(holding_map.keys()))
 
         if not raw_quotes:
             return format_error("Unable to fetch quotes for portfolio symbols")
