@@ -1,5 +1,5 @@
 {
-  "$schema": "https://cdn.mpak.dev/schemas/2025-10-19/mpak.json",
+  "manifest_version": "0.4",
   "name": "@justnsmith/alpha-vantage-mcp",
   "version": "0.1.0",
   "description": "MCP server exposing Alpha Vantage market data — stock quotes, historical prices, company fundamentals, technical indicators, news sentiment, and earnings history.",
