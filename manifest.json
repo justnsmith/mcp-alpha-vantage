@@ -1,0 +1,39 @@
+{
+  "$schema": "https://cdn.mpak.dev/schemas/2025-10-19/mpak.json",
+  "name": "@justnsmith/alpha-vantage-mcp",
+  "version": "0.1.0",
+  "description": "MCP server exposing Alpha Vantage market data — stock quotes, historical prices, company fundamentals, technical indicators, news sentiment, and earnings history.",
+  "display_name": "Alpha Vantage MCP",
+  "author": {
+    "name": "Justin Smith",
+    "url": "https://github.com/justnsmith"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/justnsmith/mcp-alpha-vantage",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/justnsmith/mcp-alpha-vantage"
+  },
+  "keywords": ["mcp", "alpha-vantage", "stocks", "finance", "market-data"],
+  "server": {
+    "type": "python",
+    "entry_point": "server",
+    "mcp_config": {
+      "command": "python",
+      "args": ["-m", "server"],
+      "env": {
+        "PYTHONPATH": "${__dirname}/src",
+        "ALPHA_VANTAGE_API_KEY": "${user_config.api_key}"
+      }
+    }
+  },
+  "user_config": {
+    "api_key": {
+      "type": "string",
+      "title": "Alpha Vantage API Key",
+      "description": "Your Alpha Vantage API key from alphavantage.co",
+      "sensitive": true,
+      "required": true
+    }
+  }
+}

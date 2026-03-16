@@ -1,0 +1,16 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write  # Upload to releases
+  id-token: write  # OIDC authentication with registry
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: NimbleBrainInc/mcpb-pack@v2
